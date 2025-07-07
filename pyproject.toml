@@ -23,7 +23,7 @@ classifiers = [
 
 [tool.poetry.scripts]
 charmed-analytics-ci = "charmed_analytics_ci.main:main"
-caci = "charmed_analytics_ci.main:main"
+chaci = "charmed_analytics_ci.main:main"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
