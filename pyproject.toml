@@ -4,7 +4,7 @@
 name = "charmed-analytics-ci"
 version = "0.1.0"
 description = "A CLI tool for automating CI tasks across Charmed Operator repositories"
-authors = ["Charmed Kubeflow <you@example.com>"]
+authors = ["Charmed Kubeflow"]
 license = "Apache-2.0"
 readme = "README.md"
 homepage = "https://github.com/canonical/charmed-analytics-ci"

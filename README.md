@@ -26,6 +26,7 @@ pip install charmed-analytics-ci
 Or with Poetry for development:
 
 ```bash
+git clone https://github.com/canonical/charmed-analytics-ci.git
 poetry install
 ```
 

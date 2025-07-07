@@ -9,10 +9,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5.6.0
-        with:
-          python-version: "3.12"
       - run: pipx install tox
       - name: Run linters
         run: tox -e lint
@@ -21,10 +17,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5.6.0
-        with:
-          python-version: "3.12"
       - run: pipx install tox
       - name: Run tests
         run: tox -e unit
@@ -33,10 +25,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5.6.0
-        with:
-          python-version: "3.12"
       - run: pipx install tox
       - name: Run integration tests
         run: tox -vve integration
