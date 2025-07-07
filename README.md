@@ -27,6 +27,7 @@ Or with Poetry for development:
 
 ```bash
 git clone https://github.com/canonical/charmed-analytics-ci.git
+cd charmed-analytics-ci
 poetry install
 ```
 
