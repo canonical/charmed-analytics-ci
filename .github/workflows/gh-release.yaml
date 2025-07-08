@@ -43,13 +43,19 @@ jobs:
           package="charmed-analytics-ci"
           tag_version=${GITHUB_REF_NAME#v}
 
+          # Get latest published version from PyPI (might be empty on first release)
           latest=$(curl -s https://pypi.org/pypi/$package/json | jq -r '.releases | keys[]' | sort -V | tail -1)
 
           echo "Latest on PyPI: $latest"
           echo "Git tag: $tag_version"
 
-          if [ "$tag_version" = "$latest" ]; then
-            echo "❌ Version $tag_version already exists on PyPI"
+          if [ -z "$latest" ]; then
+            echo "ℹ️ No version found on PyPI — assuming first release"
+            exit 0
+          fi
+
+          if dpkg --compare-versions "$tag_version" le "$latest"; then
+            echo "❌ Git tag version must be newer than latest PyPI version"
             exit 1
           fi
 
