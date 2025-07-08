@@ -3,8 +3,7 @@ name: Draft Tagged Release
 on:
   push:
     tags:
-      - "v*"
-      - "[0-9]+.[0-9]+.[0-9]+*"
+      - "v[0-9]+.[0-9]+.[0-9]+*"
 
 jobs:
   test:
@@ -44,7 +43,7 @@ jobs:
           package="charmed-analytics-ci"
           tag_version=${GITHUB_REF_NAME#v}
 
-          latest=$(curl -s https://pypi.org/pypi/$package/json | jq -r '.info.version')
+          latest=$(curl -s https://pypi.org/pypi/$package/json | jq -r '.releases | keys[]' | sort -V | tail -1)
 
           echo "Latest on PyPI: $latest"
           echo "Git tag: $tag_version"
