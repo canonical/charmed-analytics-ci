@@ -1,0 +1,33 @@
+This PR was opened automatically by the `charmed-analytics-ci` library as part of the Rock CI system after the rock image was built and published.
+The following updates were made:
+
+- Updated rock references in the following files:
+{% for entry in replace_image %}
+  - {{ entry.file }} (path: {{ entry.path }})
+{% endfor %}
+
+{% if service_spec %}
+- Updated service configuration in the following files:
+{% for entry in service_spec %}
+  - {{ entry.file }}
+    {% if entry.user %}
+    - Set user at path `{{ entry.user.path }}` to `{{ entry.user.value }}`
+    {% endif %}
+    {% if entry.command %}
+    - Set command at path `{{ entry.command.path }}` to `{{ entry.command.value }}`
+    {% endif %}
+{% endfor %}
+{% endif %}
+
+{% if service_spec_missing %}
+⚠️ Warning: The following service-spec file(s) were not found and must be updated manually:
+{% for entry in service_spec_missing %}
+- File: `{{ entry.file }}`
+  {% if entry.user %}
+  - Please manually set user to: `{{ entry.user.value }}`
+  {% endif %}
+  {% if entry.command %}
+  - Please manually set command to: `{{ entry.command.value }}`
+  {% endif %}
+{% endfor %}
+{% endif %}

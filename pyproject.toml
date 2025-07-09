@@ -21,14 +21,18 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
+include = ["src/charmed_analytics_ci/templates/*.j2"]
+
 [tool.poetry.scripts]
 charmed-analytics-ci = "charmed_analytics_ci.main:main"
 chaci = "charmed_analytics_ci.main:main"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
+"ruamel.yaml" = "^0.18.14"
 GitPython = "^3.1.44"
 PyGithub = "^2.6.1"
+Jinja2 = "^3.1.6"
 
 # Testing tools configuration
 [tool.coverage.run]
@@ -93,9 +97,14 @@ optional = true
 
 [tool.poetry.group.unit.dependencies]
 coverage = "^7.6.1"
+GitPython = "^3.1.44"
+PyGithub = "^2.6.1"
+Jinja2 = "^3.1.6"
+jsonschema = "^4.24.0"
 pytest = "^8.3.4"
 pytest-mock = "^3.14.0"
 pyyaml = "^6.0.2"
+"ruamel.yaml" = "^0.18.14"
 
 [tool.poetry.group.integration]
 optional = true
