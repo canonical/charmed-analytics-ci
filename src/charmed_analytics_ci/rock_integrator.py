@@ -58,39 +58,51 @@ class IntegrationResult:
 
 def _get_from_path(data: Any, path: str) -> Any:
     """
-    Traverse a nested dict/list using dot/bracket path notation.
+    Retrieve a value from a nested dict/list using dot/bracket notation.
 
     Args:
-        data: The data structure (typically a nested dict) to traverse.
-        path: A string path like 'spec.containers[0].image'.
+        data: The nested data structure (dicts/lists).
+        path: Path like 'spec.containers[0].image'.
 
     Returns:
-        The value found at the given path.
+        The value at the specified path.
 
     Raises:
-        KeyError or IndexError if the path is invalid.
+        KeyError: If a required dict key is missing.
+        IndexError: If a list index is out of bounds.
     """
     elements = re.split(r"\.(?![^\[]*\])", path)
+
     for el in elements:
         if "[" in el:
             key, idx = el.split("[")
-            data = data[key][int(idx.rstrip("]"))]
+            idx = int(idx.rstrip("]"))
+
+            if key not in data or not isinstance(data[key], list):
+                raise KeyError(f"Expected a list at key '{key}' in path '{path}'")
+            if idx >= len(data[key]):
+                raise IndexError(f"Index [{idx}] out of bounds for '{key}' in path '{path}'")
+            data = data[key][idx]
         else:
+            if el not in data:
+                raise KeyError(f"Missing key '{el}' in path '{path}'")
             data = data[el]
+
     return data
 
 
 def _set_in_path(data: Any, path: str, value: Any) -> None:
     """
-    Set a value in a nested dict/list using dot/bracket path notation.
+    Set a value in a nested dict/list using dot/bracket path notation,
+    but only if the full path already exists.
 
     Args:
         data: The dict or list to mutate.
         path: Path expression like 'spec.containers[0].image'.
         value: Value to assign at the specified path.
 
-    Notes:
-        This function mutates the input data in-place.
+    Raises:
+        KeyError or IndexError: If the path does not exist.
     """
     elements = re.split(r"\.(?![^\[]*\])", path)
     for i, el in enumerate(elements):
@@ -98,18 +110,21 @@ def _set_in_path(data: Any, path: str, value: Any) -> None:
         if "[" in el:
             key, idx = el.split("[")
             idx = int(idx.rstrip("]"))
-            data = data.setdefault(key, [])
-            while len(data) <= idx:
-                data.append({})
+            if key not in data or not isinstance(data[key], list):
+                raise KeyError(f"Key '{key}' not found or not a list in path '{path}'")
+            if idx >= len(data[key]):
+                raise IndexError(f"Index [{idx}] out of range for '{key}' in path '{path}'")
             if is_last:
-                data[idx] = value
+                data[key][idx] = value
             else:
-                data = data[idx]
+                data = data[key][idx]
         else:
+            if el not in data:
+                raise KeyError(f"Key '{el}' not found in path '{path}'")
             if is_last:
                 data[el] = value
             else:
-                data = data.setdefault(el, {})
+                data = data[el]
 
 
 def _load_yaml_or_json(path: Path) -> Union[dict, list]:
@@ -211,7 +226,6 @@ def apply_integration(
         path_expr = entry["path"]
 
         if not file_path.exists():
-            logger.error(f"Missing file for replace-image: {file_path}")
             missing_files.append(file_path)
             continue
 
@@ -222,9 +236,7 @@ def apply_integration(
             updated_files.append(file_path)
             logger.info(f"✅ Updated image path '{path_expr}' in {file_path}")
         except Exception as e:
-            error_msg = f"{file_path}: {path_expr} -> {e}"
-            path_errors.append(error_msg)
-            logger.error(f"❌ {error_msg}")
+            path_errors.append(f"{file_path}: {path_expr} -> {e}")
 
     # === Handle service-spec updates
     for entry in integration.get("service-spec", []):
@@ -246,11 +258,8 @@ def apply_integration(
 
             _dump_yaml_or_json(file_path, data)
             updated_files.append(file_path)
-            logger.info(f"✅ Updated service-spec in {file_path}")
         except Exception as e:
-            error_msg = f"{file_path}: service-spec -> {e}"
-            path_errors.append(error_msg)
-            logger.error(f"❌ {error_msg}")
+            path_errors.append(f"{file_path}: service-spec -> {e}")
 
     return IntegrationResult(
         updated_files=updated_files,

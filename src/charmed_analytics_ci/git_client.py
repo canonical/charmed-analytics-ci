@@ -17,42 +17,64 @@ from charmed_analytics_ci.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-# Supported GitHub URL patterns (HTTPS or SSH)
+# Supported GitHub URL patterns
 HTTPS_URL_PATTERN = re.compile(r"^https://(?:[^@]+@)?github\.com/([^/]+/[^/]+)(?:\.git)?$")
-SSH_URL_PATTERN = re.compile(r"git@github\.com:([^/]+/[^/]+)\.git")
+SSH_URL_PATTERN = re.compile(r"^git@github\.com:([^/]+/[^/]+)\.git$")
 
 
 @dataclass
 class GitCredentials:
-    """Holds GitHub credentials."""
+    """
+    Holds GitHub credentials.
+
+    Attributes:
+        username: GitHub username.
+        token: Personal access token used for authentication.
+    """
 
     username: str
     token: str
 
 
 class GitClientError(Exception):
-    """Generic error raised by GitClient operations."""
+    """
+    Exception raised for generic Git client-related issues.
+
+    Raised when an operation with git or GitHub API fails due to configuration or connectivity.
+    """
 
 
 class PullRequestAlreadyExistsError(GitClientError):
-    """Raised when a pull request from the same branch already exists."""
+    """
+    Raised when a pull request from the current branch already exists on GitHub.
+
+    Attributes:
+        url: URL of the existing pull request.
+    """
 
     def __init__(self, url: str):
-        self.url = url
         super().__init__(f"A pull request already exists: {url}")
+        self.url = url
 
 
 class GitClient:
-    """Manages local Git operations and GitHub pull request interactions."""
+    """
+    A client that wraps local Git operations and GitHub pull request creation.
+
+    Attributes:
+        repo: A GitPython Repo object representing the local repository.
+        gh_repo: A PyGithub Repository object connected to the GitHub repo.
+        credentials: GitHub credentials used for Git and API operations.
+    """
 
     def __init__(self, repo: Repo, gh_repo: Repository, credentials: GitCredentials) -> None:
         """
-        Initialize GitClient.
+        Initialize a GitClient instance.
 
         Args:
-            repo: Local Git repository instance.
-            gh_repo: GitHub repository object.
-            credentials: GitHub username and token.
+            repo: The local GitPython repository instance.
+            gh_repo: The corresponding GitHub Repository object.
+            credentials: GitHub credentials for authentication.
         """
         self.repo = repo
         self.gh_repo = gh_repo
@@ -60,15 +82,17 @@ class GitClient:
 
     @property
     def current_branch(self) -> str:
-        """Returns the name of the currently checked out branch."""
+        """
+        Return the name of the currently checked out Git branch.
+        """
         return self.repo.active_branch.name
 
     def checkout_branch(self, branch: str) -> None:
         """
-        Switch to a given branch. Creates it locally if it doesn't exist.
+        Switch to a specified branch, creating it locally if it doesn't exist.
 
         Args:
-            branch: The name of the branch to switch to.
+            branch: Name of the branch to check out.
         """
         try:
             self.repo.git.checkout(branch)
@@ -76,18 +100,15 @@ class GitClient:
             self.repo.git.checkout("-b", branch)
 
     def commit_and_push(
-        self,
-        commit_message: str,
-        branch: Optional[str] = None,
-        force: bool = False,
+        self, commit_message: str, branch: Optional[str] = None, force: bool = False
     ) -> None:
         """
-        Commit all staged changes and push to the specified branch.
+        Stage all changes, commit them, and push to remote.
 
         Args:
-            commit_message: The Git commit message.
-            branch: If specified, switch/create this branch before committing.
-            force: Whether to force push the changes.
+            commit_message: The message to use for the commit.
+            branch: Optional branch to switch to before committing.
+            force: Whether to force-push changes.
         """
         if branch:
             self.checkout_branch(branch)
@@ -101,105 +122,123 @@ class GitClient:
 
         self.repo.git.push(*push_args)
 
-    def open_pull_request(
-        self,
-        base: str,
-        title: str,
-        body: str,
-    ) -> PullRequest:
+    def open_pull_request(self, base: str, title: str, body: str) -> PullRequest:
         """
-        Create a pull request from the current branch to the target base branch.
+        Open a pull request from the current branch to a base branch.
 
         Args:
-            base: The branch to merge into (e.g., 'main').
+            base: The target branch to merge into (e.g., "main").
             title: Title of the pull request.
-            body: Body/description of the pull request.
+            body: Detailed body text for the pull request.
 
         Returns:
-            A GitHub PullRequest object.
+            The created GitHub PullRequest object.
 
         Raises:
-            PullRequestAlreadyExistsError: If a PR from this branch already exists.
-            GitClientError: If PR creation fails.
+            PullRequestAlreadyExistsError: If a PR from the same branch already exists.
+            GitClientError: If pull request creation fails.
         """
-        full_head = f"{self.gh_repo.owner.login}:{self.current_branch}"
+        head = f"{self.gh_repo.owner.login}:{self.current_branch}"
         try:
-            existing_prs = self.gh_repo.get_pulls(state="open", head=full_head, base=base)
-            if existing_prs.totalCount > 0:
-                raise PullRequestAlreadyExistsError(existing_prs[0].html_url)
+            prs = self.gh_repo.get_pulls(state="open", head=head, base=base)
+            if prs.totalCount > 0:
+                raise PullRequestAlreadyExistsError(prs[0].html_url)
 
             logger.info("Creating PR: %s → %s", self.current_branch, base)
-            pr = self.gh_repo.create_pull(
-                base=base,
-                head=f"{self.gh_repo.owner.login}:{self.current_branch}",
-                title=title,
-                body=body,
-            )
+            pr = self.gh_repo.create_pull(base=base, head=head, title=title, body=body)
             logger.info("PR created: %s", pr.html_url)
             return pr
-
         except GithubException as e:
             raise GitClientError(f"Failed to create pull request: {e}") from e
 
 
 def create_git_client_from_url(
-    url: str,
-    credentials: GitCredentials,
-    clone_path: Path = Path("/tmp"),
+    url: str, credentials: GitCredentials, clone_path: Path = Path("/tmp")
 ) -> GitClient:
     """
-    Clone a GitHub repository or reuse existing one, then return a GitClient.
+    Clone or reuse a GitHub repository and return a GitClient instance.
+
+    This function:
+    - Validates and extracts the repo name.
+    - Clones the repo if not already present.
+    - Configures the repo with Git credentials.
+    - Connects to GitHub API.
 
     Args:
-        url: The GitHub repository URL (HTTPS or SSH).
-        credentials: GitHub username and access token.
-        clone_path: Local directory to clone into.
+        url: GitHub HTTPS or SSH URL.
+        credentials: GitHub credentials for clone and API.
+        clone_path: Where to store the local clone.
 
     Returns:
-        A ready-to-use GitClient instance.
+        A fully initialized GitClient.
 
     Raises:
-        GitClientError: If repo exists and remote URL doesn't match.
+        GitClientError: If cloning or configuration fails.
     """
     repo_name = _extract_repo_name(url)
-    local_path = clone_path / repo_name.split("/")[-1]
+    repo_dir = clone_path / repo_name.split("/")[-1]
+    authenticated_url = f"https://{credentials.token}:x-oauth-basic@github.com/{repo_name}.git"
 
-    if not local_path.exists():
-        logger.info("Cloning repository %s to %s", url, local_path)
-        repo = Repo.clone_from(url, local_path)
-    else:
+    repo = _get_or_clone_repo(authenticated_url, url, repo_dir)
+    _configure_git(repo, credentials, repo_name)
+
+    try:
+        gh_repo = Github(auth=Token(credentials.token)).get_repo(repo_name)
+    except Exception as e:
+        raise GitClientError(f"Failed to connect to GitHub repository '{repo_name}': {e}") from e
+
+    return GitClient(repo=repo, gh_repo=gh_repo, credentials=credentials)
+
+
+def _get_or_clone_repo(authenticated_url: str, original_url: str, local_path: Path) -> Repo:
+    """
+    Clone the repo if not already cloned, otherwise validate and reuse.
+
+    Args:
+        authenticated_url: Authenticated URL with token.
+        original_url: Original user-provided GitHub URL.
+        local_path: Where the repo is or will be located.
+
+    Returns:
+        GitPython Repo object.
+
+    Raises:
+        GitClientError: If cloning fails or remotes mismatch.
+    """
+    try:
+        if not local_path.exists():
+            logger.info("Cloning repository %s to %s", authenticated_url, local_path)
+            return Repo.clone_from(authenticated_url, local_path)
+
         logger.info("Using existing repo at %s", local_path)
         repo = Repo(local_path)
 
-        existing_remote = repo.remote().url
-        expected = _extract_repo_name(url)
-        actual = _extract_repo_name(existing_remote)
+        expected = _extract_repo_name(original_url)
+        actual = _extract_repo_name(repo.remote().url)
 
         if expected != actual:
             raise GitClientError(
-                f"Repo at {local_path} points to a different remote " f"({actual} != {expected})"
+                f"Repo at {local_path} points to a different remote ({actual} != {expected})"
             )
 
-    _configure_git(repo, credentials, repo_name)
-
-    github_client = Github(auth=Token(credentials.token))
-    gh_repo = github_client.get_repo(repo_name)
-
-    return GitClient(repo, gh_repo, credentials)
+        return repo
+    except GitCommandError as e:
+        error_msg = e.stderr.strip() if e.stderr else str(e)
+        raise GitClientError(f"Failed to clone repository '{original_url}': {error_msg}") from e
 
 
 def _extract_repo_name(url: str) -> str:
     """
-    Extract 'org/repo' from a GitHub HTTPS or SSH URL.
+    Extract 'org/repo' from a GitHub SSH or HTTPS URL.
 
     Args:
-        url: The GitHub repository URL.
+        url: GitHub repository URL.
 
     Returns:
-        Repository name in 'owner/repo' format.
+        A string like 'org/repo'.
 
     Raises:
-        GitClientError: If the URL format is invalid.
+        GitClientError: If URL is not a valid GitHub format.
     """
     match = HTTPS_URL_PATTERN.match(url) or SSH_URL_PATTERN.match(url)
     if not match:
@@ -209,17 +248,16 @@ def _extract_repo_name(url: str) -> str:
 
 def _configure_git(repo: Repo, creds: GitCredentials, repo_name: str) -> None:
     """
-    Set Git username/email and configure remote with token auth.
+    Set Git user info and configure the remote to use HTTPS with token.
 
     Args:
-        repo: The local Git repository.
+        repo: Local repository.
         creds: GitHub credentials.
-        repo_name: GitHub repository in 'owner/repo' format.
+        repo_name: GitHub repository name in 'org/repo' format.
     """
     with repo.config_writer(config_level="repository") as config:
         config.set_value("user", "name", creds.username)
         config.set_value("user", "email", f"{creds.username}@users.noreply.github.com")
 
-    # Configure HTTPS remote with embedded token for auth
-    authenticated_url = f"https://{creds.token}:x-oauth-basic@github.com/{repo_name}.git"
-    repo.remote().set_url(authenticated_url)
+    remote_url = f"https://{creds.token}:x-oauth-basic@github.com/{repo_name}.git"
+    repo.remote().set_url(remote_url)

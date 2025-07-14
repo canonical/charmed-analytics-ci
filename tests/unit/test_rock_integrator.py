@@ -62,7 +62,7 @@ def test_files(temp_dir: Path) -> tuple[Path, Path]:
     test_yaml.write_text(yaml.dump({"containers": [{"image": "old"}]}))
 
     service_yaml = temp_dir / "service.yaml"
-    service_yaml.write_text(yaml.dump({}))
+    service_yaml.write_text(yaml.dump({"user": "", "command": ""}))
 
     return test_yaml, service_yaml
 
@@ -123,23 +123,25 @@ def test_invalid_integration_index(valid_metadata_file: Path) -> None:
         )
 
 
-# ───────────────────────────────
+# ─────────────────────────────────────────────
 # Internal utility function tests
-# ───────────────────────────────
+# ─────────────────────────────────────────────
 
 
-def test_set_in_path_nested_dict() -> None:
-    """Set a nested dictionary path using dot notation."""
+def test_set_in_path_nested_dict_raises_if_missing() -> None:
+    """Should raise if the top-level key does not exist."""
     data = {}
-    _set_in_path(data, "a.b.c", 42)
-    assert data == {"a": {"b": {"c": 42}}}
+    with pytest.raises(KeyError, match="Key 'a' not found in path 'a.b.c'"):
+        _set_in_path(data, "a.b.c", 42)
 
 
-def test_set_in_path_with_list() -> None:
-    """Set a value inside a list using bracket notation."""
+def test_set_in_path_with_list_raises_if_path_invalid() -> None:
+    """Should raise if trying to set inside a nonexistent nested structure."""
     data = {"containers": [{}]}
-    _set_in_path(data, "containers[0].image", "nginx:latest")
-    assert data["containers"][0]["image"] == "nginx:latest"
+    with pytest.raises(
+        KeyError, match="Key 'image' not found in path 'containers\\[0\\]\\.image'"
+    ):
+        _set_in_path(data, "containers[0].image", "nginx:latest")
 
 
 def test_get_from_path_nested_dict() -> None:

@@ -29,6 +29,9 @@ chaci = "charmed_analytics_ci.main:main"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
+click = "^8.2.1"
+jsonschema = "^4.24.0"
+PyYAML = "^6.0.2"
 "ruamel.yaml" = "^0.18.14"
 GitPython = "^3.1.44"
 PyGithub = "^2.6.1"
@@ -112,3 +115,4 @@ optional = true
 [tool.poetry.group.integration.dependencies]
 pytest = "^8.3.4"
 tenacity = "^9.0.0"
+GitPython = "^3.1.44"
