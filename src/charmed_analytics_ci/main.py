@@ -1,9 +1,73 @@
-# Copyright 2025 Canonical Ltd.
-# See LICENSE file for licensing details.
+import os
+from pathlib import Path
+
+import click
+
+from charmed_analytics_ci.logger import setup_logger
+from charmed_analytics_ci.rock_metadata_handler import integrate_rock_into_consumers
+
+logger = setup_logger(__name__)
 
 
+@click.group()
 def main():
-    print("CLI is working!")
+    """CLI tool for managing CI tasks for charmed analytics."""
+
+
+@main.command(name="integrate-rock")
+@click.argument("metadata_file", type=click.Path(exists=True, dir_okay=False))
+@click.argument("base_branch", type=str)
+@click.argument("rock_image", type=str)
+@click.argument("github_token", required=False)
+@click.argument("github_username", required=False)
+@click.option(
+    "--clone-dir",
+    default="/tmp",
+    show_default=True,
+    type=click.Path(file_okay=False),
+    help="Directory where consumer repositories will be cloned.",
+)
+def integrate_rock_command(
+    metadata_file: str,
+    base_branch: str,
+    rock_image: str,
+    github_token: str,
+    github_username: str,
+    clone_dir: str,
+) -> None:
+    """
+    Integrate a rock image into all consumers listed in the metadata file.
+
+    METADATA_FILE: Path to rock-ci-metadata.yaml
+
+    BASE_BRANCH: Branch to merge the PR into (e.g. main)
+
+    ROCK_IMAGE: Image reference (e.g. ghcr.io/canonical/foo:1.0.0)
+
+    GITHUB_TOKEN: Optional GitHub token (will fall back to GH_TOKEN env var)
+
+    GITHUB_USERNAME: Optional GitHub username (defaults to '__token__' if not provided)
+    """
+    logger.info("Executing integrate-rock command")
+
+    try:
+        token = github_token or os.environ.get("GH_TOKEN")
+        if not token:
+            raise click.ClickException("GitHub token not provided and GH_TOKEN not set.")
+
+        user = github_username or "__token__"
+
+        integrate_rock_into_consumers(
+            metadata_path=Path(metadata_file),
+            rock_image=rock_image,
+            clone_base_dir=Path(clone_dir),
+            github_token=token,
+            github_username=user,
+            base_branch=base_branch,
+        )
+    except Exception:
+        logger.exception("Failed to integrate rock image.")
+        click.get_current_context().exit(1)
 
 
 if __name__ == "__main__":

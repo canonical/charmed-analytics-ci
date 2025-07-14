@@ -7,8 +7,10 @@ from charmed_analytics_ci.rock_metadata_handler import integrate_rock_into_consu
 
 
 @pytest.fixture
-def fake_metadata(tmp_path: Path) -> Path:
-    """Creates a fake metadata file for testing."""
+def metadata_file(tmp_path: Path) -> Path:
+    """
+    Create a temporary fake rock-ci-metadata.yaml file for testing.
+    """
     content = """
 integrations:
   - consumer-repository: https://github.com/example/repo.git
@@ -33,15 +35,19 @@ integrations:
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
-def test_skips_pr_if_files_missing(
-    mock_validate,
-    mock_apply,
-    mock_create_client,
-    mock_template_loader,
-    fake_metadata,
-    tmp_path,
-):
-    mock_validate.return_value = {
+def test_skips_pr_if_missing_files(
+    mock_validate_metadata,
+    mock_apply_integration,
+    mock_create_git_client,
+    mock_load_template,
+    metadata_file: Path,
+    tmp_path: Path,
+) -> None:
+    """
+    Test that PR is skipped if integration has only missing files (no changes).
+    """
+    # Setup integration metadata
+    mock_validate_metadata.return_value = {
         "integrations": [
             {
                 "consumer-repository": "https://github.com/example/repo.git",
@@ -50,36 +56,49 @@ def test_skips_pr_if_files_missing(
             }
         ]
     }
-    mock_apply.return_value = mock.Mock(updated_files=[], missing_files=[Path("a.yaml")])
-    mock_create_client.return_value = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
-    mock_template_loader.return_value = mock.Mock(render=mock.Mock(return_value="body"))
 
-    integrate_rock_into_consumers(
-        metadata_path=fake_metadata,
-        rock_image="rock/image:1.0.0",
-        clone_base_dir=tmp_path,
-        github_token="secret",
-        github_username="ci-bot",
+    # Simulate no updates, but some files missing
+    mock_apply_integration.return_value = mock.Mock(
+        updated_files=[],
+        missing_files=[Path("a.yaml")],
+        path_errors=[],
     )
 
-    client = mock_create_client.return_value
-    client.commit_and_push.assert_not_called()
-    client.open_pull_request.assert_not_called()
+    mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
+    mock_create_git_client.return_value = mock_client
+    mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="fake-body"))
+
+    # Execute handler
+    integrate_rock_into_consumers(
+        metadata_path=metadata_file,
+        rock_image="rock/image:1.0.0",
+        clone_base_dir=tmp_path,
+        github_token="ghp_secret",
+        github_username="ci-bot",
+        base_branch="main",
+    )
+
+    # Ensure no PR was opened
+    mock_client.commit_and_push.assert_not_called()
+    mock_client.open_pull_request.assert_not_called()
 
 
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
-def test_creates_pr_when_changes_exist(
-    mock_validate,
-    mock_apply,
-    mock_create_client,
-    mock_template_loader,
-    fake_metadata,
-    tmp_path,
-):
-    mock_validate.return_value = {
+def test_creates_pr_when_files_updated(
+    mock_validate_metadata,
+    mock_apply_integration,
+    mock_create_git_client,
+    mock_load_template,
+    metadata_file: Path,
+    tmp_path: Path,
+) -> None:
+    """
+    Test that PR is created when some files are successfully updated.
+    """
+    mock_validate_metadata.return_value = {
         "integrations": [
             {
                 "consumer-repository": "https://github.com/example/repo.git",
@@ -88,18 +107,26 @@ def test_creates_pr_when_changes_exist(
             }
         ]
     }
-    mock_apply.return_value = mock.Mock(updated_files=[Path("file.yaml")], missing_files=[])
-    mock_create_client.return_value = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
-    mock_template_loader.return_value = mock.Mock(render=mock.Mock(return_value="body"))
 
-    integrate_rock_into_consumers(
-        metadata_path=fake_metadata,
-        rock_image="rock/image:1.0.0",
-        clone_base_dir=tmp_path,
-        github_token="secret",
-        github_username="ci-bot",
+    mock_apply_integration.return_value = mock.Mock(
+        updated_files=[Path("file.yaml")],
+        missing_files=[],
+        path_errors=[],
     )
 
-    client = mock_create_client.return_value
-    client.commit_and_push.assert_called_once()
-    client.open_pull_request.assert_called_once()
+    mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
+    mock_create_git_client.return_value = mock_client
+    mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="fake-body"))
+
+    integrate_rock_into_consumers(
+        metadata_path=metadata_file,
+        rock_image="rock/image:1.0.0",
+        clone_base_dir=tmp_path,
+        github_token="ghp_secret",
+        github_username="ci-bot",
+        base_branch="main",
+    )
+
+    # Ensure PR creation was triggered
+    mock_client.commit_and_push.assert_called_once()
+    mock_client.open_pull_request.assert_called_once()

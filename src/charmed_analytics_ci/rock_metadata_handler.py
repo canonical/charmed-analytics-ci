@@ -22,12 +22,14 @@ def integrate_rock_into_consumers(
     clone_base_dir: Path,
     github_token: str,
     github_username: str,
+    base_branch: str,
 ) -> None:
     """
     For each integration in the metadata file:
     - Clone the target repository
+    - Check out the base branch
     - Apply the rock image update
-    - Open a pull request with changes
+    - Open a pull request with changes targeting the base branch
 
     Args:
         metadata_path: Path to the validated rock-ci-metadata.yaml file.
@@ -35,25 +37,25 @@ def integrate_rock_into_consumers(
         clone_base_dir: Directory into which to clone consumer repositories.
         github_token: GitHub personal access token for authentication.
         github_username: Username of the GitHub bot/user.
-
-    Raises:
-        Exception: If any integration fails.
+        base_branch: The branch into which the PR should be merged.
     """
     metadata = validate_metadata_file(metadata_path)
     integrations = metadata.get("integrations", [])
     rock_name, rock_tag = rock_image.split(":")
-    branch_name = f"integrate-{rock_name.split('/')[-1]}-{rock_tag}"
+    pr_branch_name = f"integrate-{rock_name.split('/')[-1]}-{rock_tag}"
 
     pr_template = _load_pr_template()
 
     for i, integration in enumerate(integrations):
         repo_url = integration["consumer-repository"]
-        target_branch: str = integration.get("consumer-repository-target-branch", "main")
 
-        logger.info(f"Processing integration {i} → {repo_url} on branch {target_branch}")
+        logger.info(f"Processing integration {i} → {repo_url} into base branch {base_branch}")
 
         creds = GitCredentials(username=github_username, token=github_token)
         client = create_git_client_from_url(repo_url, credentials=creds, clone_path=clone_base_dir)
+
+        # Check out the base branch so we branch off it
+        client.checkout_branch(base_branch)
 
         result = apply_integration(
             metadata_path=metadata_path,
@@ -73,13 +75,11 @@ def integrate_rock_into_consumers(
             logger.info("No changes detected for this integration. Skipping PR.")
             continue
 
-        # Format PR content
         pr_title = f"chore: integrate rock image {rock_name}:{rock_tag}"
         commit_message = pr_title
 
-        # Separate missing files from found ones for templating clarity
-        replace_image = integrations[i]["replace-image"]
-        service_spec_all = integrations[i].get("service-spec", [])
+        replace_image = integration["replace-image"]
+        service_spec_all = integration.get("service-spec", [])
         missing_files_set = set(str(p) for p in result.missing_files)
 
         service_spec_found = [
@@ -95,5 +95,5 @@ def integrate_rock_into_consumers(
             service_spec_missing=service_spec_missing,
         )
 
-        client.commit_and_push(commit_message=commit_message, branch=branch_name)
-        client.open_pull_request(base=target_branch, title=pr_title, body=pr_body)
+        client.commit_and_push(commit_message=commit_message, branch=pr_branch_name)
+        client.open_pull_request(base=base_branch, title=pr_title, body=pr_body)
