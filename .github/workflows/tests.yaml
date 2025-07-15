@@ -2,6 +2,9 @@ name: Tests
 
 on:
   workflow_call:
+    secrets:
+      CHACI_TEST_TOKEN:
+        required: true
 
 jobs:
   lint:

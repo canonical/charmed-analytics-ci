@@ -10,3 +10,5 @@ jobs:
   tests:
     name: Run Tests
     uses: ./.github/workflows/tests.yaml
+    secrets:
+      CHACI_TEST_TOKEN: ${{ secrets.CHACI_TEST_TOKEN }}
