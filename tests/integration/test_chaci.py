@@ -3,16 +3,23 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
+from typing import Optional, Tuple
 
 import pytest
 from github import Github
+from github.Repository import Repository
 
 DEFAULT_IMAGE_BASE = "ghcr.io/example/my-rock"
 
 
 @pytest.fixture
-def repo_info():
-    """Fixture for shared GitHub test repo configuration."""
+def repo_info() -> dict:
+    """
+    Fixture for shared GitHub test repository configuration.
+
+    Returns:
+        Dictionary with repository details including full name, token, and base branch.
+    """
     return {
         "repo_full_name": os.environ["CHACI_TEST_REPO"],
         "token": os.environ["CHACI_TEST_TOKEN"],
@@ -21,18 +28,39 @@ def repo_info():
 
 
 @pytest.fixture
-def github_client(repo_info):
-    """Provides authenticated GitHub repo object."""
+def github_client(repo_info: dict) -> Repository:
+    """
+    Provides an authenticated GitHub repository object using PyGithub.
+
+    Args:
+        repo_info: Dictionary containing GitHub authentication details.
+
+    Returns:
+        A PyGithub Repository object.
+    """
     gh = Github(repo_info["token"])
     return gh.get_repo(repo_info["repo_full_name"])
 
 
-def run_chaci(metadata_path, base_branch, token, username="test-user", tmpdir=None):
+def run_chaci(
+    metadata_path: Path,
+    base_branch: str,
+    token: str,
+    username: str = "test-user",
+    tmpdir: Optional[Path] = None,
+) -> Tuple[subprocess.CompletedProcess[str], str, str, str]:
     """
     Run the chaci CLI with a randomly generated tag for a fixed image base.
 
+    Args:
+        metadata_path: Path to the rock-ci-metadata.yaml file.
+        base_branch: The GitHub branch to target for PRs.
+        token: GitHub authentication token.
+        username: GitHub username.
+        tmpdir: Optional custom temporary directory.
+
     Returns:
-        (result, rock_short_name, rock_tag, rock_image)
+        A tuple containing the subprocess result, rock short name, tag, and image.
     """
     rock_short_name = DEFAULT_IMAGE_BASE.split("/")[-1]
     rock_tag = str(uuid.uuid4())[:8]
@@ -71,8 +99,12 @@ def run_chaci(metadata_path, base_branch, token, username="test-user", tmpdir=No
     ],
 )
 def test_chaci_success_opens_pr_and_cleans_up(
-    repo_info, github_client, metadata_filename, expected_body_filename
-):
+    repo_info: dict,
+    github_client: Repository,
+    metadata_filename: str,
+    expected_body_filename: str,
+) -> None:
+    """Test that chaci opens a pull request and cleans it up after validation."""
     expected_body = (Path(__file__).parent / expected_body_filename).read_text().strip()
     metadata_file = Path(__file__).parent / metadata_filename
 
@@ -118,7 +150,10 @@ def test_chaci_success_opens_pr_and_cleans_up(
         ("rock-ci-metadata-invalid-path.yaml", "not found in path"),
     ],
 )
-def test_chaci_integration_failures(repo_info, metadata_filename, expected_error):
+def test_chaci_integration_failures(
+    repo_info: dict, metadata_filename: str, expected_error: str
+) -> None:
+    """Test that the chaci CLI fails with expected error messages for invalid metadata."""
     metadata_file = Path(__file__).parent / metadata_filename
 
     with tempfile.TemporaryDirectory() as tmpdir:

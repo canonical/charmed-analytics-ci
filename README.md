@@ -108,7 +108,7 @@ Requires access to a real GitHub repo and valid token. These tests:
 Run with:
 
 ```bash
-export GH_TOKEN=<your_token>
+export CHACI_TEST_TOKEN=<your_token>
 export CHACI_TEST_REPO="org/repo-name"
 export CHACI_TEST_BASE_BRANCH="target-branch"
 
