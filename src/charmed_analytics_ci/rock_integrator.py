@@ -18,7 +18,8 @@ logger = setup_logger(__name__)
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
-_yaml.indent(mapping=2, sequence=4, offset=2)
+_yaml.indent(mapping=2, sequence=2, offset=0)
+_yaml.width = 1000000  # prevent wrapping of long lines
 
 
 @dataclass
@@ -158,7 +159,7 @@ def _dump_yaml_or_json(path: Path, data: Union[dict, list]) -> None:
         ValueError: If the file extension is unsupported.
     """
     if path.suffix == ".json":
-        path.write_text(json.dumps(data, indent=2) + "\n")
+        path.write_text(json.dumps(data, indent=4) + "\n")
     else:
         with path.open("w") as f:
             _yaml.dump(data, f)
