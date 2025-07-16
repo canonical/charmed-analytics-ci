@@ -1,3 +1,7 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+import json
 import os
 import subprocess
 import tempfile
@@ -6,20 +10,19 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import pytest
+import yaml
 from github import Github
 from github.Repository import Repository
+from jsonpath_ng.ext import parse as jsonpath_parse
+
+from charmed_analytics_ci.rock_ci_metadata_models import RockCIMetadata
 
 DEFAULT_IMAGE_BASE = "ghcr.io/example/my-rock"
 
 
 @pytest.fixture
 def repo_info() -> dict:
-    """
-    Fixture for shared GitHub test repository configuration.
-
-    Returns:
-        Dictionary with repository details including full name, token, and base branch.
-    """
+    """Fixture for shared GitHub test repository configuration."""
     return {
         "repo_full_name": os.environ["CHACI_TEST_REPO"],
         "token": os.environ["CHACI_TEST_TOKEN"],
@@ -29,15 +32,7 @@ def repo_info() -> dict:
 
 @pytest.fixture
 def github_client(repo_info: dict) -> Repository:
-    """
-    Provides an authenticated GitHub repository object using PyGithub.
-
-    Args:
-        repo_info: Dictionary containing GitHub authentication details.
-
-    Returns:
-        A PyGithub Repository object.
-    """
+    """Provides an authenticated GitHub repository object using PyGithub."""
     gh = Github(repo_info["token"])
     return gh.get_repo(repo_info["repo_full_name"])
 
@@ -49,19 +44,7 @@ def run_chaci(
     username: str = "test-user",
     tmpdir: Optional[Path] = None,
 ) -> Tuple[subprocess.CompletedProcess[str], str, str, str]:
-    """
-    Run the chaci CLI with a randomly generated tag for a fixed image base.
-
-    Args:
-        metadata_path: Path to the rock-ci-metadata.yaml file.
-        base_branch: The GitHub branch to target for PRs.
-        token: GitHub authentication token.
-        username: GitHub username.
-        tmpdir: Optional custom temporary directory.
-
-    Returns:
-        A tuple containing the subprocess result, rock short name, tag, and image.
-    """
+    """Run the chaci CLI with a randomly generated tag for a fixed image base."""
     rock_short_name = DEFAULT_IMAGE_BASE.split("/")[-1]
     rock_tag = str(uuid.uuid4())[:8]
     rock_image = f"{DEFAULT_IMAGE_BASE}:{rock_tag}"
@@ -91,11 +74,11 @@ def run_chaci(
 
 
 @pytest.mark.parametrize(
-    "metadata_filename, expected_body_filename",
+    "metadata_filename, expected_body_filename, expect_service_files_modified",
     [
-        ("rock-ci-metadata.yaml", "expected_pr_body.md"),
-        ("rock-ci-metadata-service.yaml", "expected_pr_body_service.md"),
-        ("rock-ci-metadata-service-missing.yaml", "expected_pr_body_service_missing.md"),
+        ("rock-ci-metadata.yaml", "expected_pr_body.md", True),
+        ("rock-ci-metadata-service.yaml", "expected_pr_body_service.md", True),
+        ("rock-ci-metadata-service-missing.yaml", "expected_pr_body_service_missing.md", False),
     ],
 )
 def test_chaci_success_opens_pr_and_cleans_up(
@@ -103,12 +86,15 @@ def test_chaci_success_opens_pr_and_cleans_up(
     github_client: Repository,
     metadata_filename: str,
     expected_body_filename: str,
+    expect_service_files_modified: bool,
 ) -> None:
-    """Test that chaci opens a pull request and cleans it up after validation."""
-    expected_body = (Path(__file__).parent / expected_body_filename).read_text().strip()
+    """Test that chaci opens a pull request, modifies expected files, and cleans it up."""
     metadata_file = Path(__file__).parent / metadata_filename
+    raw = yaml.safe_load(metadata_file.read_text())
+    metadata = RockCIMetadata.model_validate(raw)
 
-    result, rock_short_name, rock_tag, _ = run_chaci(
+    expected_body = (Path(__file__).parent / expected_body_filename).read_text().strip()
+    result, rock_short_name, rock_tag, rock_image = run_chaci(
         metadata_path=metadata_file,
         base_branch=repo_info["base_branch"],
         token=repo_info["token"],
@@ -122,21 +108,68 @@ def test_chaci_success_opens_pr_and_cleans_up(
 
     pr = None
     try:
-        prs = [
-            p
-            for p in github_client.get_pulls(state="open")
-            if p.head.ref == pr_branch and p.title == pr_title
-        ]
-        assert len(prs) == 1, f"Expected one PR to be opened, found {len(prs)}"
-        pr = prs[0]
+        pr = _get_open_pr(github_client, pr_branch, pr_title)
         assert pr.body.strip() == expected_body
+
+        changed_files = {f.filename: f for f in pr.get_files()}
+        _assert_image_replacements(changed_files, github_client, pr_branch, metadata, rock_image)
+        _assert_service_spec_changes(changed_files, metadata, expect_service_files_modified)
     finally:
-        if pr:
-            pr.edit(state="closed")
-        try:
-            github_client.get_git_ref(f"heads/{pr_branch}").delete()
-        except Exception:
-            pass
+        _cleanup_pr(pr, github_client, pr_branch)
+
+
+def _get_open_pr(github_client: Repository, branch: str, title: str):
+    prs = [
+        p
+        for p in github_client.get_pulls(state="open")
+        if p.head.ref == branch and p.title == title
+    ]
+    assert len(prs) == 1, f"Expected one PR to be opened, found {len(prs)}"
+    return prs[0]
+
+
+def _assert_image_replacements(changed_files, github_client, pr_branch, metadata, expected_image):
+    for integration in metadata.integrations:
+        for entry in integration.replace_image:
+            file_path = str(entry.file)
+            assert file_path in changed_files, f"Expected file '{file_path}' to be modified"
+
+            raw = github_client.get_contents(file_path, ref=pr_branch).decoded_content
+            try:
+                data = yaml.safe_load(raw)
+            except Exception:
+                data = json.loads(raw)
+
+            matches = list(jsonpath_parse(entry.path).find(data))
+            assert matches, f"No match for path '{entry.path}' in file {file_path}"
+
+            for match in matches:
+                assert match.value == expected_image, (
+                    f"Expected path '{entry.path}' in '{file_path}' to be set to "
+                    f"'{expected_image}', but found '{match.value}'"
+                )
+
+
+def _assert_service_spec_changes(changed_files, metadata, expect_modified: bool):
+    service_files = {str(e.file) for i in metadata.integrations for e in i.service_spec or []}
+    for service_file in service_files:
+        if expect_modified:
+            assert (
+                service_file in changed_files
+            ), f"Expected service file '{service_file}' to be updated"
+        else:
+            assert (
+                service_file not in changed_files
+            ), f"Did NOT expect service file '{service_file}' to be changed"
+
+
+def _cleanup_pr(pr, github_client, pr_branch: str):
+    if pr:
+        pr.edit(state="closed")
+    try:
+        github_client.get_git_ref(f"heads/{pr_branch}").delete()
+    except Exception:
+        pass
 
 
 # ---------------------- PARAMETRIZED FAILURE CASES ----------------------
