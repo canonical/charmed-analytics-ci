@@ -1,33 +1,51 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
+from charmed_analytics_ci.rock_ci_metadata_models import (
+    IntegrationEntry,
+    PathValue,
+    ReplaceImageEntry,
+    RockCIMetadata,
+    ServiceSpecEntry,
+)
 from charmed_analytics_ci.rock_integrator import IntegrationResult
 from charmed_analytics_ci.rock_metadata_handler import integrate_rock_into_consumers
 
 
 @pytest.fixture
 def metadata_file(tmp_path: Path) -> Path:
-    """Creates a temporary fake rock-ci-metadata.yaml file for testing."""
-    content = """
-integrations:
-  - consumer-repository: https://github.com/example/repo.git
-    replace-image:
-      - file: file.yaml
-        path: spec.image
-    service-spec:
-      - file: svc.yaml
-        user:
-          path: spec.user
-          value: root
-        command:
-          path: spec.cmd
-          value: run
-"""
+    """Creates an empty rock-ci-metadata.yaml file in a temporary path."""
     path = tmp_path / "rock-ci-metadata.yaml"
-    path.write_text(content)
+    path.write_text("integrations: []")
     return path
+
+
+def build_metadata(with_service_spec: bool = True) -> RockCIMetadata:
+    """Helper to build RockCIMetadata with or without service-spec entries."""
+    return RockCIMetadata(
+        integrations=[
+            IntegrationEntry(
+                consumer_repository="https://github.com/example/repo.git",
+                replace_image=[ReplaceImageEntry(file="file.yaml", path="spec.image")],
+                service_spec=(
+                    [
+                        ServiceSpecEntry(
+                            file="svc.yaml",
+                            user=PathValue(path="spec.user", value="root"),
+                            command=PathValue(path="spec.cmd", value="run"),
+                        )
+                    ]
+                    if with_service_spec
+                    else []
+                ),
+            )
+        ]
+    )
 
 
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
@@ -42,24 +60,12 @@ def test_errors_if_missing_non_service_files(
     metadata_file: Path,
     tmp_path: Path,
 ) -> None:
-    """Fails when missing files are not listed in service-spec."""
-    mock_validate_metadata.return_value = {
-        "integrations": [
-            {
-                "consumer-repository": "https://github.com/example/repo.git",
-                "replace-image": [{"file": "missing.yaml", "path": "spec.image"}],
-                "service-spec": [],
-            }
-        ]
-    }
-
-    missing_file = tmp_path / "missing.yaml"
+    """Fails if non-service-spec files are missing in the integration result."""
+    mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
+    missing_file = tmp_path / "file.yaml"
     mock_apply_integration.return_value = IntegrationResult(
-        updated_files=[],
-        missing_files=[missing_file],
-        path_errors=[],
+        updated_files=[], missing_files=[missing_file], path_errors=[]
     )
-
     mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
     mock_create_git_client.return_value = mock_client
     mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
@@ -87,32 +93,13 @@ def test_allows_missing_service_spec_files(
     metadata_file: Path,
     tmp_path: Path,
 ) -> None:
-    """Missing service-spec files are not treated as errors."""
-    mock_validate_metadata.return_value = {
-        "integrations": [
-            {
-                "consumer-repository": "https://github.com/example/repo.git",
-                "replace-image": [{"file": "file.yaml", "path": "spec.image"}],
-                "service-spec": [
-                    {
-                        "file": "svc.yaml",
-                        "user": {"path": "spec.user", "value": "root"},
-                        "command": {"path": "spec.cmd", "value": "run"},
-                    }
-                ],
-            }
-        ]
-    }
-
+    """Allows service-spec files to be missing without raising an error."""
+    mock_validate_metadata.return_value = build_metadata()
     missing_file = tmp_path / "svc.yaml"
     updated_file = tmp_path / "file.yaml"
-
     mock_apply_integration.return_value = IntegrationResult(
-        updated_files=[updated_file],
-        missing_files=[missing_file],
-        path_errors=[],
+        updated_files=[updated_file], missing_files=[missing_file], path_errors=[]
     )
-
     mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
     mock_create_git_client.return_value = mock_client
     mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
@@ -125,7 +112,6 @@ def test_allows_missing_service_spec_files(
         github_username="bot",
         base_branch="main",
     )
-
     mock_client.commit_and_push.assert_called_once()
     mock_client.open_pull_request.assert_called_once()
 
@@ -142,22 +128,11 @@ def test_errors_if_path_errors_present(
     metadata_file: Path,
     tmp_path: Path,
 ) -> None:
-    """Fails if any path errors are returned."""
-    mock_validate_metadata.return_value = {
-        "integrations": [
-            {
-                "consumer-repository": "https://github.com/example/repo.git",
-                "replace-image": [{"file": "file.yaml", "path": "spec.image"}],
-            }
-        ]
-    }
-
+    """Raises error when invalid path expressions are found."""
+    mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     mock_apply_integration.return_value = IntegrationResult(
-        updated_files=[],
-        missing_files=[],
-        path_errors=["bad path"],
+        updated_files=[], missing_files=[], path_errors=["bad path"]
     )
-
     mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
     mock_create_git_client.return_value = mock_client
     mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
@@ -185,22 +160,11 @@ def test_errors_if_no_changes_detected(
     metadata_file: Path,
     tmp_path: Path,
 ) -> None:
-    """Fails if no updated files were detected."""
-    mock_validate_metadata.return_value = {
-        "integrations": [
-            {
-                "consumer-repository": "https://github.com/example/repo.git",
-                "replace-image": [{"file": "file.yaml", "path": "spec.image"}],
-            }
-        ]
-    }
-
+    """Raises error if integration produced no updated files."""
+    mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     mock_apply_integration.return_value = IntegrationResult(
-        updated_files=[],
-        missing_files=[],
-        path_errors=[],
+        updated_files=[], missing_files=[], path_errors=[]
     )
-
     mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
     mock_create_git_client.return_value = mock_client
     mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
@@ -228,24 +192,12 @@ def test_creates_pr_after_successful_validation(
     metadata_file: Path,
     tmp_path: Path,
 ) -> None:
-    """PR is created only when integration is clean and valid."""
-    mock_validate_metadata.return_value = {
-        "integrations": [
-            {
-                "consumer-repository": "https://github.com/example/repo.git",
-                "replace-image": [{"file": "file.yaml", "path": "spec.image"}],
-            }
-        ]
-    }
-
+    """Commits changes and opens a PR when integration is successful."""
+    mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     updated_file = tmp_path / "file.yaml"
-
     mock_apply_integration.return_value = IntegrationResult(
-        updated_files=[updated_file],
-        missing_files=[],
-        path_errors=[],
+        updated_files=[updated_file], missing_files=[], path_errors=[]
     )
-
     mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
     mock_create_git_client.return_value = mock_client
     mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
@@ -258,6 +210,5 @@ def test_creates_pr_after_successful_validation(
         github_username="bot",
         base_branch="main",
     )
-
     mock_client.commit_and_push.assert_called_once()
     mock_client.open_pull_request.assert_called_once()

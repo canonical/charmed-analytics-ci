@@ -5,14 +5,13 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
-import jsonschema
 import yaml
 from ruamel.yaml import YAML
 
 from charmed_analytics_ci.logger import setup_logger
-from charmed_analytics_ci.rock_ci_metadata_schema import rock_ci_metadata_schema
+from charmed_analytics_ci.rock_ci_metadata_models import RockCIMetadata
 
 logger = setup_logger(__name__)
 
@@ -35,17 +34,8 @@ class ServiceSpecEntry:
     """Describes a service-spec file modification."""
 
     file: Path
-    user: Optional[Dict[str, str]] = None
-    command: Optional[Dict[str, str]] = None
-
-
-@dataclass
-class IntegrationTarget:
-    """Represents a single integration entry from rock-ci-metadata.yaml."""
-
-    consumer_repository: str
-    replace_image: List[Replacement]
-    service_spec: List[ServiceSpecEntry]
+    user: Optional[dict] = None
+    command: Optional[dict] = None
 
 
 @dataclass
@@ -165,26 +155,25 @@ def _dump_yaml_or_json(path: Path, data: Union[dict, list]) -> None:
             _yaml.dump(data, f)
 
 
-def validate_metadata_file(metadata_path: Path) -> dict:
+def validate_metadata_file(metadata_path: Path) -> RockCIMetadata:
     """
-    Validate and parse rock-ci-metadata.yaml.
+    Validate and parse rock-ci-metadata.yaml using Pydantic.
 
     Args:
         metadata_path: Path to the YAML metadata file.
 
     Returns:
-        Parsed metadata as a dictionary.
+        Parsed metadata as a RockCIMetadata object.
 
     Raises:
         FileNotFoundError: If the file doesn't exist.
-        jsonschema.ValidationError: If the file fails schema validation.
+        pydantic.ValidationError: If the file fails validation.
     """
     if not metadata_path.exists():
         raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
 
-    data = yaml.safe_load(metadata_path.read_text())
-    jsonschema.validate(instance=data, schema=rock_ci_metadata_schema)
-    return data
+    raw = yaml.safe_load(metadata_path.read_text())
+    return RockCIMetadata.model_validate(raw)
 
 
 def apply_integration(
@@ -207,13 +196,13 @@ def apply_integration(
 
     Raises:
         IndexError: If the specified integration_index is invalid.
-        jsonschema.ValidationError: If the metadata file is invalid.
+        pydantic.ValidationError: If the metadata file is invalid.
         FileNotFoundError: If the metadata file doesn't exist.
     """
     metadata = validate_metadata_file(metadata_path)
 
     try:
-        integration = metadata["integrations"][integration_index]
+        integration = metadata.integrations[integration_index]
     except IndexError:
         raise IndexError(f"Integration index {integration_index} not found in metadata")
 
@@ -222,9 +211,9 @@ def apply_integration(
     path_errors: List[str] = []
 
     # === Handle replace-image updates
-    for entry in integration.get("replace-image", []):
-        file_path = base_dir / entry["file"]
-        path_expr = entry["path"]
+    for entry in integration.replace_image:
+        file_path = base_dir / entry.file
+        path_expr = entry.path
 
         if not file_path.exists():
             missing_files.append(file_path)
@@ -240,8 +229,8 @@ def apply_integration(
             path_errors.append(f"{file_path}: {path_expr} -> {e}")
 
     # === Handle service-spec updates
-    for entry in integration.get("service-spec", []):
-        file_path = base_dir / entry["file"]
+    for entry in integration.service_spec:
+        file_path = base_dir / entry.file
 
         if not file_path.exists():
             logger.warning(f"⚠️ Missing file for service-spec: {file_path}")
@@ -251,11 +240,11 @@ def apply_integration(
         try:
             data = _load_yaml_or_json(file_path)
 
-            if "user" in entry:
-                _set_in_path(data, entry["user"]["path"], entry["user"]["value"])
+            if entry.user:
+                _set_in_path(data, entry.user.path, entry.user.value)
 
-            if "command" in entry:
-                _set_in_path(data, entry["command"]["path"], entry["command"]["value"])
+            if entry.command:
+                _set_in_path(data, entry.command.path, entry.command.value)
 
             _dump_yaml_or_json(file_path, data)
             updated_files.append(file_path)

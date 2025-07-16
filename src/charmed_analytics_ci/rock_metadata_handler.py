@@ -8,6 +8,7 @@ from jinja2 import Template
 
 from charmed_analytics_ci.git_client import GitCredentials, create_git_client_from_url
 from charmed_analytics_ci.logger import setup_logger
+from charmed_analytics_ci.rock_ci_metadata_models import IntegrationEntry, RockCIMetadata
 from charmed_analytics_ci.rock_integrator import (
     IntegrationResult,
     apply_integration,
@@ -27,7 +28,7 @@ def validate_integration_result(
     result: IntegrationResult,
     index: int,
     repo_url: str,
-    integration: dict,
+    integration: IntegrationEntry,
     base_dir: Path,
 ) -> None:
     """
@@ -37,13 +38,13 @@ def validate_integration_result(
         result: Result of the integration operation.
         index: Index of the integration in the metadata list.
         repo_url: Git URL of the integration target.
-        integration: The integration metadata dict.
+        integration: The integration metadata entry.
         base_dir: Base path of the cloned repository.
 
     Raises:
         RuntimeError: If the integration is invalid or incomplete.
     """
-    allowed_missing = {base_dir / entry["file"] for entry in integration.get("service-spec", [])}
+    allowed_missing = {base_dir / entry.file for entry in integration.service_spec or []}
 
     non_service_spec_missing = [
         path for path in result.missing_files if path not in allowed_missing
@@ -77,20 +78,9 @@ def integrate_rock_into_consumers(
 ) -> None:
     """
     Integrate a rock image into multiple consumer repositories defined in a metadata file.
-
-    Args:
-        metadata_path: Path to the rock-ci-metadata.yaml file.
-        rock_image: Full rock image string (e.g. ghcr.io/org/my-rock:1.2.3).
-        clone_base_dir: Where to clone repositories.
-        github_token: GitHub token for authentication.
-        github_username: GitHub username for pushing commits.
-        base_branch: Target base branch for PRs.
-
-    Raises:
-        RuntimeError: If any validation fails across integrations.
     """
-    metadata = validate_metadata_file(metadata_path)
-    integrations = metadata.get("integrations", [])
+    metadata: RockCIMetadata = validate_metadata_file(metadata_path)
+    integrations = metadata.integrations
     rock_name, rock_tag = rock_image.split(":")
     rock_short_name = rock_name.split("/")[-1]
     pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
@@ -99,7 +89,7 @@ def integrate_rock_into_consumers(
     prepared_prs = []
 
     for i, integration in enumerate(integrations):
-        repo_url = integration["consumer-repository"]
+        repo_url = integration.consumer_repository
         logger.info(f"Preparing integration {i} → {repo_url} into base branch {base_branch}")
 
         creds = GitCredentials(username=github_username, token=github_token)
@@ -121,8 +111,8 @@ def integrate_rock_into_consumers(
         pr_title = f"chore: integrate rock image {rock_short_name}:{rock_tag}"
         commit_message = pr_title
 
-        replace_image = integration["replace-image"]
-        service_spec_all = integration.get("service-spec", [])
+        replace_image = [entry.model_dump() for entry in integration.replace_image]
+        service_spec_all = [entry.model_dump() for entry in integration.service_spec or []]
         missing_files = set(result.missing_files)
 
         service_spec_found = [

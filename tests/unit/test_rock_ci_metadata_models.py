@@ -1,11 +1,10 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import jsonschema
 import pytest
-from jsonschema import validate
+from pydantic import ValidationError
 
-from charmed_analytics_ci.rock_ci_metadata_schema import rock_ci_metadata_schema
+from charmed_analytics_ci.rock_ci_metadata_models import RockCIMetadata
 
 VALID_METADATA = {
     "integrations": [
@@ -32,27 +31,26 @@ VALID_METADATA = {
 
 def test_valid_metadata():
     """Should validate with full valid structure."""
-    validate(instance=VALID_METADATA, schema=rock_ci_metadata_schema)
+    RockCIMetadata.model_validate(VALID_METADATA)
 
 
 def test_missing_integrations():
     """Should fail when 'integrations' is missing."""
-    with pytest.raises(jsonschema.ValidationError):
-        validate(instance={}, schema=rock_ci_metadata_schema)
+    with pytest.raises(ValidationError, match=r"integrations\s*\n\s*Field required"):
+        RockCIMetadata.model_validate({})
 
 
 def test_empty_integrations():
     """Should fail when 'integrations' is an empty list."""
-    data = {"integrations": []}
-    with pytest.raises(jsonschema.ValidationError):
-        validate(instance=data, schema=rock_ci_metadata_schema)
+    with pytest.raises(ValidationError, match=r"List should have at least 1 item.*too_short"):
+        RockCIMetadata.model_validate({"integrations": []})
 
 
 def test_missing_replace_image():
     """Should fail when 'replace-image' is missing in integration."""
     data = {"integrations": [{"consumer-repository": "https://example.com/repo.git"}]}
-    with pytest.raises(jsonschema.ValidationError):
-        validate(instance=data, schema=rock_ci_metadata_schema)
+    with pytest.raises(ValidationError, match=r"replace-image\s*\n\s*Field required"):
+        RockCIMetadata.model_validate(data)
 
 
 def test_service_spec_optional():
@@ -65,7 +63,7 @@ def test_service_spec_optional():
             }
         ]
     }
-    validate(instance=data, schema=rock_ci_metadata_schema)
+    RockCIMetadata.model_validate(data)
 
 
 def test_service_spec_requires_user_or_command():
@@ -79,8 +77,8 @@ def test_service_spec_requires_user_or_command():
             }
         ]
     }
-    with pytest.raises(jsonschema.ValidationError):
-        validate(instance=data, schema=rock_ci_metadata_schema)
+    with pytest.raises(ValidationError, match=r"At least one of 'user' or 'command'"):
+        RockCIMetadata.model_validate(data)
 
 
 def test_service_spec_with_only_user():
@@ -96,11 +94,14 @@ def test_service_spec_with_only_user():
             }
         ]
     }
-    validate(instance=data, schema=rock_ci_metadata_schema)
+    RockCIMetadata.model_validate(data)
 
 
 def test_invalid_property_in_root():
     """Should fail when there’s an unexpected top-level field."""
-    data = {"integrations": VALID_METADATA["integrations"], "extra": "unexpected"}
-    with pytest.raises(jsonschema.ValidationError):
-        validate(instance=data, schema=rock_ci_metadata_schema)
+    data = {
+        "integrations": VALID_METADATA["integrations"],
+        "extra": "unexpected",
+    }
+    with pytest.raises(ValidationError, match=r"Extra inputs are not permitted"):
+        RockCIMetadata.model_validate(data)

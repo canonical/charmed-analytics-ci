@@ -9,6 +9,7 @@ from typing import Generator
 import pytest
 import yaml
 
+from charmed_analytics_ci.rock_ci_metadata_models import RockCIMetadata
 from charmed_analytics_ci.rock_integrator import (
     IntegrationResult,
     _dump_yaml_or_json,
@@ -70,8 +71,8 @@ def test_files(temp_dir: Path) -> tuple[Path, Path]:
 def test_validate_metadata_file(valid_metadata_file: Path) -> None:
     """Ensure valid metadata passes schema validation."""
     metadata = validate_metadata_file(valid_metadata_file)
-    assert isinstance(metadata, dict)
-    assert "integrations" in metadata
+    assert isinstance(metadata, RockCIMetadata)
+    assert metadata.integrations  # Optional: validate structure
 
 
 def test_apply_integration_success(
