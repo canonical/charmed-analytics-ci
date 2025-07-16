@@ -98,14 +98,27 @@ integrations:
 tox -e unit
 ```
 
-### Integration tests
+### 🔁 Integration tests
 
-Requires access to a real GitHub repo and valid token. These tests:
-- Open a real PR in a test repository
-- Validate the contents of the PR
-- Automatically clean up the branch and PR after execution
+> ⚠️ These tests **interact with a real GitHub repository** and require a **fine-grained GitHub token** with appropriate permissions.
 
-Run with:
+#### Required GitHub token permissions
+
+The token must be a **fine-grained personal access token** (PAT) with:
+
+- **Repository access**: Select the repository you're testing against
+- **Permissions**:
+  - `Contents: Read and write`
+  - `Pull requests: Read and write`
+
+These are needed to:
+- Clone the repo
+- Push branches
+- Open and manage pull requests
+
+---
+
+#### Setup and run:
 
 ```bash
 export CHACI_TEST_TOKEN=<your_token>
@@ -114,6 +127,12 @@ export CHACI_TEST_BASE_BRANCH="target-branch"
 
 tox -e integration
 ```
+
+> The integration tests will:
+> - Clone the specified repository
+> - Create a temporary branch and pull request
+> - Validate the PR contents
+> - Clean up the branch and PR after execution
 
 ---
 

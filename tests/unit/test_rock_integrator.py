@@ -13,16 +13,14 @@ from charmed_analytics_ci.rock_ci_metadata_models import RockCIMetadata
 from charmed_analytics_ci.rock_integrator import (
     IntegrationResult,
     _dump_yaml_or_json,
-    _get_from_path,
     _load_yaml_or_json,
-    _set_in_path,
+    _set_jsonpath_value,
     apply_integration,
     validate_metadata_file,
 )
 
 ROCK_IMAGE = "ghcr.io/canonical/my-rock:1.2.3"
 
-# Sample metadata content for valid test case
 VALID_METADATA = {
     "integrations": [
         {
@@ -72,7 +70,7 @@ def test_validate_metadata_file(valid_metadata_file: Path) -> None:
     """Ensure valid metadata passes schema validation."""
     metadata = validate_metadata_file(valid_metadata_file)
     assert isinstance(metadata, RockCIMetadata)
-    assert metadata.integrations  # Optional: validate structure
+    assert metadata.integrations
 
 
 def test_apply_integration_success(
@@ -129,32 +127,25 @@ def test_invalid_integration_index(valid_metadata_file: Path) -> None:
 # ─────────────────────────────────────────────
 
 
-def test_set_in_path_nested_dict_raises_if_missing() -> None:
-    """Should raise if the top-level key does not exist."""
-    data = {}
-    with pytest.raises(KeyError, match="Key 'a' not found in path 'a.b.c'"):
-        _set_in_path(data, "a.b.c", 42)
+def test_set_jsonpath_value_success() -> None:
+    """Successfully set a nested value using a valid JSONPath."""
+    data = {"resources": {"foo": {"bar": "OLD"}}}
+    _set_jsonpath_value(data, "resources.foo.bar", "NEW")
+    assert data["resources"]["foo"]["bar"] == "NEW"
 
 
-def test_set_in_path_with_list_raises_if_path_invalid() -> None:
-    """Should raise if trying to set inside a nonexistent nested structure."""
-    data = {"containers": [{}]}
-    with pytest.raises(
-        KeyError, match="Key 'image' not found in path 'containers\\[0\\]\\.image'"
-    ):
-        _set_in_path(data, "containers[0].image", "nginx:latest")
+def test_set_jsonpath_value_array_index() -> None:
+    """Set a value using an array index via JSONPath."""
+    data = {"containers": [{"image": "old"}]}
+    _set_jsonpath_value(data, "containers[0].image", "new")
+    assert data["containers"][0]["image"] == "new"
 
 
-def test_get_from_path_nested_dict() -> None:
-    """Retrieve a value from nested dict using path."""
-    data = {"a": {"b": {"c": "value"}}}
-    assert _get_from_path(data, "a.b.c") == "value"
-
-
-def test_get_from_path_with_list() -> None:
-    """Retrieve a value from list using bracket syntax."""
-    data = {"containers": [{"image": "nginx"}]}
-    assert _get_from_path(data, "containers[0].image") == "nginx"
+def test_set_jsonpath_value_invalid_path_raises() -> None:
+    """Raise error when the JSONPath does not match anything."""
+    data = {"foo": "bar"}
+    with pytest.raises(KeyError, match="No matches found for path"):
+        _set_jsonpath_value(data, "nonexistent.key", "value")
 
 
 def test_dump_and_load_json(tmp_path: Path) -> None:

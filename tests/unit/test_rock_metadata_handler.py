@@ -14,7 +14,10 @@ from charmed_analytics_ci.rock_ci_metadata_models import (
     ServiceSpecEntry,
 )
 from charmed_analytics_ci.rock_integrator import IntegrationResult
-from charmed_analytics_ci.rock_metadata_handler import integrate_rock_into_consumers
+from charmed_analytics_ci.rock_metadata_handler import (
+    integrate_rock_into_consumers,
+    parse_rock_image,
+)
 
 
 @pytest.fixture
@@ -46,6 +49,21 @@ def build_metadata(with_service_spec: bool = True) -> RockCIMetadata:
             )
         ]
     )
+
+
+def test_parse_rock_image_valid():
+    result = parse_rock_image("ghcr.io/canonical/my-rock:1.2.3")
+    assert result == ("ghcr.io/canonical/my-rock", "1.2.3", "my-rock")
+
+
+def test_parse_rock_image_missing_colon():
+    with pytest.raises(ValueError, match="missing tag"):
+        parse_rock_image("ghcr.io/canonical/my-rock")
+
+
+def test_parse_rock_image_empty_tag():
+    with pytest.raises(ValueError, match="Invalid rock image format"):
+        parse_rock_image("ghcr.io/canonical/my-rock:")
 
 
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")

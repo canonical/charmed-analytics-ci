@@ -2,12 +2,12 @@
 # See LICENSE file for licensing details.
 
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 import yaml
+from jsonpath_ng.ext import parse as parse_jsonpath
 from ruamel.yaml import YAML
 
 from charmed_analytics_ci.logger import setup_logger
@@ -47,77 +47,6 @@ class IntegrationResult:
     path_errors: List[str]
 
 
-def _get_from_path(data: Any, path: str) -> Any:
-    """
-    Retrieve a value from a nested dict/list using dot/bracket notation.
-
-    Args:
-        data: The nested data structure (dicts/lists).
-        path: Path like 'spec.containers[0].image'.
-
-    Returns:
-        The value at the specified path.
-
-    Raises:
-        KeyError: If a required dict key is missing.
-        IndexError: If a list index is out of bounds.
-    """
-    elements = re.split(r"\.(?![^\[]*\])", path)
-
-    for el in elements:
-        if "[" in el:
-            key, idx = el.split("[")
-            idx = int(idx.rstrip("]"))
-
-            if key not in data or not isinstance(data[key], list):
-                raise KeyError(f"Expected a list at key '{key}' in path '{path}'")
-            if idx >= len(data[key]):
-                raise IndexError(f"Index [{idx}] out of bounds for '{key}' in path '{path}'")
-            data = data[key][idx]
-        else:
-            if el not in data:
-                raise KeyError(f"Missing key '{el}' in path '{path}'")
-            data = data[el]
-
-    return data
-
-
-def _set_in_path(data: Any, path: str, value: Any) -> None:
-    """
-    Set a value in a nested dict/list using dot/bracket path notation,
-    but only if the full path already exists.
-
-    Args:
-        data: The dict or list to mutate.
-        path: Path expression like 'spec.containers[0].image'.
-        value: Value to assign at the specified path.
-
-    Raises:
-        KeyError or IndexError: If the path does not exist.
-    """
-    elements = re.split(r"\.(?![^\[]*\])", path)
-    for i, el in enumerate(elements):
-        is_last = i == len(elements) - 1
-        if "[" in el:
-            key, idx = el.split("[")
-            idx = int(idx.rstrip("]"))
-            if key not in data or not isinstance(data[key], list):
-                raise KeyError(f"Key '{key}' not found or not a list in path '{path}'")
-            if idx >= len(data[key]):
-                raise IndexError(f"Index [{idx}] out of range for '{key}' in path '{path}'")
-            if is_last:
-                data[key][idx] = value
-            else:
-                data = data[key][idx]
-        else:
-            if el not in data:
-                raise KeyError(f"Key '{el}' not found in path '{path}'")
-            if is_last:
-                data[el] = value
-            else:
-                data = data[el]
-
-
 def _load_yaml_or_json(path: Path) -> Union[dict, list]:
     """
     Load YAML or JSON content into a Python object.
@@ -127,10 +56,6 @@ def _load_yaml_or_json(path: Path) -> Union[dict, list]:
 
     Returns:
         The parsed Python object (usually a dict or list).
-
-    Raises:
-        ValueError: If the file extension is unsupported.
-        FileNotFoundError: If the file doesn't exist.
     """
     if path.suffix == ".json":
         return json.loads(path.read_text())
@@ -144,15 +69,34 @@ def _dump_yaml_or_json(path: Path, data: Union[dict, list]) -> None:
     Args:
         path: File path to write to (.json or .yaml).
         data: Data to write (typically dict or list).
-
-    Raises:
-        ValueError: If the file extension is unsupported.
     """
     if path.suffix == ".json":
         path.write_text(json.dumps(data, indent=4) + "\n")
     else:
         with path.open("w") as f:
             _yaml.dump(data, f)
+
+
+def _set_jsonpath_value(data: Union[dict, list], path_expr: str, value: str) -> None:
+    """
+    Set a value at the specified JSONPath within the data.
+
+    Args:
+        data: Parsed dict or list object.
+        path_expr: JSONPath expression string.
+        value: The value to assign.
+
+    Raises:
+        KeyError: If the path does not exist in the data.
+    """
+    jsonpath_expr = parse_jsonpath(path_expr)
+    matches = jsonpath_expr.find(data)
+
+    if not matches:
+        raise KeyError(f"No matches found for path: {path_expr}")
+
+    for match in matches:
+        match.full_path.update(data, value)
 
 
 def validate_metadata_file(metadata_path: Path) -> RockCIMetadata:
@@ -164,10 +108,6 @@ def validate_metadata_file(metadata_path: Path) -> RockCIMetadata:
 
     Returns:
         Parsed metadata as a RockCIMetadata object.
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist.
-        pydantic.ValidationError: If the file fails validation.
     """
     if not metadata_path.exists():
         raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
@@ -193,11 +133,6 @@ def apply_integration(
 
     Returns:
         IntegrationResult describing updates, warnings, and errors.
-
-    Raises:
-        IndexError: If the specified integration_index is invalid.
-        pydantic.ValidationError: If the metadata file is invalid.
-        FileNotFoundError: If the metadata file doesn't exist.
     """
     metadata = validate_metadata_file(metadata_path)
 
@@ -213,25 +148,22 @@ def apply_integration(
     # === Handle replace-image updates
     for entry in integration.replace_image:
         file_path = base_dir / entry.file
-        path_expr = entry.path
-
         if not file_path.exists():
             missing_files.append(file_path)
             continue
 
         try:
             data = _load_yaml_or_json(file_path)
-            _set_in_path(data, path_expr, rock_image)
+            _set_jsonpath_value(data, entry.path, rock_image)
             _dump_yaml_or_json(file_path, data)
             updated_files.append(file_path)
-            logger.info(f"✅ Updated image path '{path_expr}' in {file_path}")
+            logger.info(f"✅ Updated image path '{entry.path}' in {file_path}")
         except Exception as e:
-            path_errors.append(f"{file_path}: {path_expr} -> {e}")
+            path_errors.append(f"{file_path}: {entry.path} -> {e}")
 
     # === Handle service-spec updates
     for entry in integration.service_spec:
         file_path = base_dir / entry.file
-
         if not file_path.exists():
             logger.warning(f"⚠️ Missing file for service-spec: {file_path}")
             missing_files.append(file_path)
@@ -241,10 +173,10 @@ def apply_integration(
             data = _load_yaml_or_json(file_path)
 
             if entry.user:
-                _set_in_path(data, entry.user.path, entry.user.value)
+                _set_jsonpath_value(data, entry.user.path, entry.user.value)
 
             if entry.command:
-                _set_in_path(data, entry.command.path, entry.command.value)
+                _set_jsonpath_value(data, entry.command.path, entry.command.value)
 
             _dump_yaml_or_json(file_path, data)
             updated_files.append(file_path)

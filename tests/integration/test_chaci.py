@@ -147,7 +147,7 @@ def test_chaci_success_opens_pr_and_cleans_up(
     [
         ("rock-ci-metadata-nonexistent-repo.yaml", "failed to clone repository"),
         ("rock-ci-metadata-missing-file.yaml", "missing expected files"),
-        ("rock-ci-metadata-invalid-path.yaml", "not found in path"),
+        ("rock-ci-metadata-invalid-path.yaml", "no matches found for path"),
     ],
 )
 def test_chaci_integration_failures(

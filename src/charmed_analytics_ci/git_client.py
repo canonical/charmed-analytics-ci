@@ -93,11 +93,25 @@ class GitClient:
 
         Args:
             branch: Name of the branch to check out.
+
+        Raises:
+            GitClientError: If checkout fails for unexpected reasons.
         """
         try:
             self.repo.git.checkout(branch)
-        except GitCommandError:
-            self.repo.git.checkout("-b", branch)
+        except GitCommandError as e:
+            # Check if the error was due to a missing branch
+            error_msg = str(e).lower()
+            if "did not match any file(s) known to git" in error_msg or "pathspec" in error_msg:
+                logger.info(f"Branch '{branch}' not found; creating new local branch.")
+                try:
+                    self.repo.git.checkout("-b", branch)
+                except GitCommandError as create_err:
+                    raise GitClientError(
+                        f"Failed to create new branch '{branch}': {create_err}"
+                    ) from create_err
+            else:
+                raise GitClientError(f"Failed to checkout branch '{branch}': {e}") from e
 
     def commit_and_push(
         self, commit_message: str, branch: Optional[str] = None, force: bool = False
@@ -177,7 +191,7 @@ def create_git_client_from_url(
     """
     repo_name = _extract_repo_name(url)
     repo_dir = clone_path / repo_name.split("/")[-1]
-    authenticated_url = f"https://{credentials.token}:x-oauth-basic@github.com/{repo_name}.git"
+    authenticated_url = _build_authenticated_url(credentials.token, repo_name)
 
     repo = _get_or_clone_repo(authenticated_url, url, repo_dir)
     _configure_git(repo, credentials, repo_name)
@@ -259,5 +273,19 @@ def _configure_git(repo: Repo, creds: GitCredentials, repo_name: str) -> None:
         config.set_value("user", "name", creds.username)
         config.set_value("user", "email", f"{creds.username}@users.noreply.github.com")
 
-    remote_url = f"https://{creds.token}:x-oauth-basic@github.com/{repo_name}.git"
+    remote_url = _build_authenticated_url(creds.token, repo_name)
     repo.remote().set_url(remote_url)
+
+
+def _build_authenticated_url(token: str, repo_name: str) -> str:
+    """
+    Construct a GitHub HTTPS URL with authentication token.
+
+    Args:
+        token: GitHub personal access token.
+        repo_name: GitHub repository in the form 'org/repo'.
+
+    Returns:
+        Authenticated GitHub HTTPS URL.
+    """
+    return f"https://{token}:x-oauth-basic@github.com/{repo_name}.git"

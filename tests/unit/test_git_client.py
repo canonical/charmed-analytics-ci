@@ -15,6 +15,7 @@ from charmed_analytics_ci.git_client import (
     GitClientError,
     GitCredentials,
     PullRequestAlreadyExistsError,
+    _build_authenticated_url,
     _configure_git,
     _extract_repo_name,
     create_git_client_from_url,
@@ -114,12 +115,21 @@ def test_checkout_branch_switches_if_exists(mock_repo):
     mock_repo.git.checkout.assert_called_once_with(TEST_BRANCH)
 
 
-def test_checkout_branch_creates_if_missing(mock_repo):
-    """It creates a new branch if it does not exist."""
-    mock_repo.git.checkout.side_effect = [GitCommandError("checkout", 1), None]
+def test_checkout_branch_creates_if_missing(mock_repo, caplog):
+    """It creates a new branch if it does not exist and logs the fallback."""
+    stderr_message = "error: pathspec 'feature-branch' did not match any file(s) known to git"
+    err = GitCommandError("checkout", 1, stderr=stderr_message)
+
+    mock_repo.git.checkout.side_effect = [err, None]
+
     client = GitClient(mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_TOKEN))
-    client.checkout_branch(FEATURE_BRANCH)
+
+    with caplog.at_level("INFO"):
+        client.checkout_branch(FEATURE_BRANCH)
+
     assert mock_repo.git.checkout.call_count == 2
+    mock_repo.git.checkout.assert_called_with("-b", FEATURE_BRANCH)
+    assert f"Branch '{FEATURE_BRANCH}' not found; creating new local branch." in caplog.text
 
 
 def test_commit_and_push_executes_all_git_commands(mock_repo):
@@ -215,3 +225,12 @@ def test_configure_git_sets_user_and_remote(monkeypatch):
     repo.remote().set_url.assert_called_once_with(
         "https://s3cr3t:x-oauth-basic@github.com/acme/myrepo.git"
     )
+
+
+def test_build_authenticated_url():
+    """It returns the correct authenticated GitHub URL."""
+    token = "ghp_exampletoken123"
+    repo_name = "acme/rocket"
+
+    expected_url = "https://ghp_exampletoken123:x-oauth-basic@github.com/acme/rocket.git"
+    assert _build_authenticated_url(token, repo_name) == expected_url

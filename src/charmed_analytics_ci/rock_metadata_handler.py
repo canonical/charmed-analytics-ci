@@ -24,6 +24,31 @@ def _load_pr_template() -> Template:
     return Template(template_path.read_text())
 
 
+def parse_rock_image(rock_image: str) -> tuple[str, str, str]:
+    """
+    Parse a rock image string into name, tag, and short name.
+
+    Args:
+        rock_image: A string like 'ghcr.io/canonical/my-rock:1.2.3'
+
+    Returns:
+        Tuple of (full_name, tag, short_name)
+
+    Raises:
+        ValueError: If the image string is not in the expected format.
+    """
+    if ":" not in rock_image:
+        raise ValueError(f"Invalid rock image format (missing tag): '{rock_image}'")
+
+    full_name, tag = rock_image.rsplit(":", 1)
+    short_name = full_name.split("/")[-1]
+
+    if not full_name or not tag:
+        raise ValueError(f"Invalid rock image format: '{rock_image}'")
+
+    return full_name, tag, short_name
+
+
 def validate_integration_result(
     result: IntegrationResult,
     index: int,
@@ -81,8 +106,8 @@ def integrate_rock_into_consumers(
     """
     metadata: RockCIMetadata = validate_metadata_file(metadata_path)
     integrations = metadata.integrations
-    rock_name, rock_tag = rock_image.split(":")
-    rock_short_name = rock_name.split("/")[-1]
+    _, rock_tag, rock_short_name = parse_rock_image(rock_image)
+    pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
     pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
 
     pr_template = _load_pr_template()
