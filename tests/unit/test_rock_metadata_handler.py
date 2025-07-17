@@ -230,3 +230,59 @@ def test_creates_pr_after_successful_validation(
     )
     mock_client.commit_and_push.assert_called_once()
     mock_client.open_pull_request.assert_called_once()
+
+
+@mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+def test_dry_run_skips_commit_and_pr(
+    mock_validate_metadata,
+    mock_apply_integration,
+    mock_create_git_client,
+    mock_load_template,
+    tmp_path: Path,
+) -> None:
+    """Dry-run mode skips commit and PR creation but still logs diff output."""
+    metadata_file = tmp_path / "rock-ci-metadata.yaml"
+    metadata_file.write_text("integrations: []")
+
+    metadata = RockCIMetadata.model_validate(
+        {
+            "integrations": [
+                {
+                    "consumer-repository": "https://github.com/example/repo.git",
+                    "replace-image": [{"file": "file.yaml", "path": "spec.image"}],
+                }
+            ]
+        }
+    )
+    mock_validate_metadata.return_value = metadata
+
+    mock_apply_integration.return_value = IntegrationResult(
+        updated_files=[tmp_path / "file.yaml"], missing_files=[], path_errors=[]
+    )
+
+    fake_repo = mock.Mock()
+    fake_repo.working_dir = str(tmp_path)
+    fake_repo.git.diff.return_value = "--- a/file.yaml\n+++ b/file.yaml\n@@ -1 +1 @@\n-old\n+new"
+    mock_client = mock.Mock(repo=fake_repo)
+    mock_create_git_client.return_value = mock_client
+
+    mock_template = mock.Mock()
+    mock_template.render.return_value = "PR body example"
+    mock_load_template.return_value = mock_template
+
+    integrate_rock_into_consumers(
+        metadata_path=metadata_file,
+        rock_image="rock/image:1.0.0",
+        clone_base_dir=tmp_path,
+        github_token="token",
+        github_username="bot",
+        base_branch="main",
+        dry_run=True,
+    )
+
+    mock_client.commit_and_push.assert_not_called()
+    mock_client.open_pull_request.assert_not_called()
+    fake_repo.git.diff.assert_called_once()

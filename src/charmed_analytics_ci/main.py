@@ -27,6 +27,12 @@ def main():
     type=click.Path(file_okay=False),
     help="Directory where consumer repositories will be cloned.",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Simulate integration without committing or opening PRs.",
+)
 def integrate_rock_command(
     metadata_file: str,
     base_branch: str,
@@ -34,6 +40,7 @@ def integrate_rock_command(
     github_token: str,
     github_username: str,
     clone_dir: str,
+    dry_run: bool,
 ) -> None:
     """
     Integrate a rock image into all consumers listed in the metadata file.
@@ -64,6 +71,7 @@ def integrate_rock_command(
             github_token=token,
             github_username=user,
             base_branch=base_branch,
+            dry_run=dry_run,
         )
     except Exception:
         logger.exception("Failed to integrate rock image.")

@@ -100,6 +100,7 @@ def integrate_rock_into_consumers(
     github_token: str,
     github_username: str,
     base_branch: str,
+    dry_run: bool = False,
 ) -> None:
     """
     Integrate a rock image into multiple consumer repositories defined in a metadata file.
@@ -157,5 +158,19 @@ def integrate_rock_into_consumers(
 
     # Push and open PRs after all validations pass
     for client, commit_message, pr_title, pr_body in prepared_prs:
-        client.commit_and_push(commit_message=commit_message, branch=pr_branch_name)
-        client.open_pull_request(base=base_branch, title=pr_title, body=pr_body)
+        if dry_run:
+            logger.info(
+                "[DRY-RUN] Would commit to branch '%s' with message: %s",
+                pr_branch_name,
+                commit_message,
+            )
+            logger.info("[DRY-RUN] Would open PR: %s → %s", pr_branch_name, base_branch)
+            logger.info("[DRY-RUN] PR body:\n%s", pr_body)
+            diff_output = client.repo.git.diff()
+            if diff_output:
+                logger.info("Diff preview:\n%s", diff_output)
+            else:
+                logger.info("No changes to show.")
+        else:
+            client.commit_and_push(commit_message=commit_message, branch=pr_branch_name)
+            client.open_pull_request(base=base_branch, title=pr_title, body=pr_body)
