@@ -69,7 +69,7 @@ def test_parse_rock_image_empty_tag():
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
-@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
 def test_errors_if_missing_non_service_files(
     mock_validate_metadata,
     mock_apply_integration,
@@ -102,7 +102,7 @@ def test_errors_if_missing_non_service_files(
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
-@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
 def test_allows_missing_service_spec_files(
     mock_validate_metadata,
     mock_apply_integration,
@@ -137,7 +137,7 @@ def test_allows_missing_service_spec_files(
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
-@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
 def test_errors_if_path_errors_present(
     mock_validate_metadata,
     mock_apply_integration,
@@ -169,7 +169,7 @@ def test_errors_if_path_errors_present(
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
-@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
 def test_errors_if_no_changes_detected(
     mock_validate_metadata,
     mock_apply_integration,
@@ -201,7 +201,7 @@ def test_errors_if_no_changes_detected(
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
-@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
 def test_creates_pr_after_successful_validation(
     mock_validate_metadata,
     mock_apply_integration,
@@ -235,7 +235,7 @@ def test_creates_pr_after_successful_validation(
 @mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
 @mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
-@mock.patch("charmed_analytics_ci.rock_metadata_handler.validate_metadata_file")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
 def test_dry_run_skips_commit_and_pr(
     mock_validate_metadata,
     mock_apply_integration,

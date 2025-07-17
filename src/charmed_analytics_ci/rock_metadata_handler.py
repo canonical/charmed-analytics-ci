@@ -12,7 +12,7 @@ from charmed_analytics_ci.rock_ci_metadata_models import IntegrationEntry, RockC
 from charmed_analytics_ci.rock_integrator import (
     IntegrationResult,
     apply_integration,
-    validate_metadata_file,
+    load_metadata_file,
 )
 
 logger = setup_logger(__name__)
@@ -105,16 +105,14 @@ def integrate_rock_into_consumers(
     """
     Integrate a rock image into multiple consumer repositories defined in a metadata file.
     """
-    metadata: RockCIMetadata = validate_metadata_file(metadata_path)
-    integrations = metadata.integrations
+    metadata: RockCIMetadata = load_metadata_file(metadata_path)
     _, rock_tag, rock_short_name = parse_rock_image(rock_image)
-    pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
     pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
 
     pr_template = _load_pr_template()
     prepared_prs = []
 
-    for i, integration in enumerate(integrations):
+    for i, integration in enumerate(metadata.integrations):
         repo_url = integration.consumer_repository
         logger.info(f"Preparing integration {i} → {repo_url} into base branch {base_branch}")
 

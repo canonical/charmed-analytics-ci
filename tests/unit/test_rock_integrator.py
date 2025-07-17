@@ -16,7 +16,7 @@ from charmed_analytics_ci.rock_integrator import (
     _load_yaml_or_json,
     _set_jsonpath_value,
     apply_integration,
-    validate_metadata_file,
+    load_metadata_file,
 )
 
 ROCK_IMAGE = "ghcr.io/canonical/my-rock:1.2.3"
@@ -66,9 +66,9 @@ def test_files(temp_dir: Path) -> tuple[Path, Path]:
     return test_yaml, service_yaml
 
 
-def test_validate_metadata_file(valid_metadata_file: Path) -> None:
+def test_load_metadata_file(valid_metadata_file: Path) -> None:
     """Ensure valid metadata passes schema validation."""
-    metadata = validate_metadata_file(valid_metadata_file)
+    metadata = load_metadata_file(valid_metadata_file)
     assert isinstance(metadata, RockCIMetadata)
     assert metadata.integrations
 

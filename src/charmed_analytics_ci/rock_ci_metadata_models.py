@@ -85,8 +85,8 @@ class IntegrationEntry(BaseModel):
         frozen=True,
     )
 
-    consumer_repository: str = Field(..., alias="consumer-repository", min_length=1)
-    replace_image: List[ReplaceImageEntry] = Field(..., alias="replace-image", min_length=1)
+    consumer_repository: str = Field(alias="consumer-repository", min_length=1)
+    replace_image: List[ReplaceImageEntry] = Field(alias="replace-image", min_length=1)
     service_spec: Optional[List[ServiceSpecEntry]] = Field(
         default_factory=list, alias="service-spec"
     )
@@ -102,4 +102,4 @@ class RockCIMetadata(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    integrations: List[IntegrationEntry] = Field(..., min_length=1)
+    integrations: List[IntegrationEntry] = Field(min_length=1)

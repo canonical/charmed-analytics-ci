@@ -99,7 +99,7 @@ def _set_jsonpath_value(data: Union[dict, list], path_expr: str, value: str) -> 
         match.full_path.update(data, value)
 
 
-def validate_metadata_file(metadata_path: Path) -> RockCIMetadata:
+def load_metadata_file(metadata_path: Path) -> RockCIMetadata:
     """
     Validate and parse rock-ci-metadata.yaml using Pydantic.
 
@@ -134,7 +134,7 @@ def apply_integration(
     Returns:
         IntegrationResult describing updates, warnings, and errors.
     """
-    metadata = validate_metadata_file(metadata_path)
+    metadata = load_metadata_file(metadata_path)
 
     try:
         integration = metadata.integrations[integration_index]
