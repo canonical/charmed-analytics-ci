@@ -1,0 +1,10 @@
+integrations:
+  - consumer-repository: https://github.com/canonical/test-kubeflow-automation.git
+   
+    replace-image:
+      - file: charms/charm1/metadata-missing.yaml
+        path: resources.kserve-controller-image.upstream-source
+      - file: charms/charm1/src/default-custom-images.json
+        path: configmap__batcher
+      - file: charms/charm1/config.yaml
+        path: options.no-proxy.default

@@ -1,0 +1,46 @@
+This PR was opened automatically by the `charmed-analytics-ci` library as part of the Rock CI system after the rock image was built and published.
+{% if triggering_pr %}
+
+🔗 Triggered by upstream PR: [{{ triggering_pr }}]({{ triggering_pr }})
+
+{% endif %}
+## 🔧 Updated Rock References
+
+The following image paths were updated:
+
+{% for entry in replace_image %}
+- **File**: `{{ entry.file }}`
+  - **Path**: `{{ entry.path }}`
+{% endfor %}
+
+{% if service_spec %}
+## ⚙️ Updated Service Specifications
+
+The following service-spec files were patched:
+
+{% for entry in service_spec %}
+- **File**: `{{ entry.file }}`
+  {% if entry.user %}
+  - Set **user** at `{{ entry.user.path }}` → `{{ entry.user.value }}`
+  {% endif %}
+  {% if entry.command %}
+  - Set **command** at `{{ entry.command.path }}` → `{{ entry.command.value }}`
+  {% endif %}
+{% endfor %}
+{% endif %}
+
+{% if service_spec_missing %}
+## ⚠️ Manual Action Required
+
+The following service-spec files were **not found** in the repository and should be updated manually:
+
+{% for entry in service_spec_missing %}
+- **File**: `{{ entry.file }}`
+  {% if entry.user %}
+  - Manually set **user** to: `{{ entry.user.value }}`
+  {% endif %}
+  {% if entry.command %}
+  - Manually set **command** to: `{{ entry.command.value }}`
+  {% endif %}
+{% endfor %}
+{% endif %}

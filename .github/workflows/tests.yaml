@@ -2,6 +2,9 @@ name: Tests
 
 on:
   workflow_call:
+    secrets:
+      CHACI_TEST_TOKEN:
+        required: true
 
 jobs:
   lint:
@@ -23,6 +26,10 @@ jobs:
   integration:
     name: Integration tests (microk8s)
     runs-on: ubuntu-24.04
+    env:
+      CHACI_TEST_TOKEN: ${{ secrets.CHACI_TEST_TOKEN }}
+      CHACI_TEST_REPO: canonical/test-kubeflow-automation
+      CHACI_TEST_BASE_BRANCH: test-rocks-automation
     steps:
       - uses: actions/checkout@v4
       - run: pipx install tox
