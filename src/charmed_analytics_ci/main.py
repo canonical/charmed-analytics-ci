@@ -18,8 +18,19 @@ def main():
 @click.argument("metadata_file", type=click.Path(exists=True, dir_okay=False))
 @click.argument("base_branch", type=str)
 @click.argument("rock_image", type=str)
-@click.argument("github_token", required=False)
-@click.argument("github_username", required=False)
+@click.option(
+    "--github-token",
+    type=str,
+    default=None,
+    help="GitHub token (falls back to GH_TOKEN environment variable if not provided).",
+)
+@click.option(
+    "--github-username",
+    type=str,
+    default="__token__",
+    show_default=True,
+    help="GitHub username to use for authentication.",
+)
 @click.option(
     "--clone-dir",
     default="/tmp",
@@ -37,7 +48,7 @@ def integrate_rock_command(
     metadata_file: str,
     base_branch: str,
     rock_image: str,
-    github_token: str,
+    github_token: str | None,
     github_username: str,
     clone_dir: str,
     dry_run: bool,
@@ -50,10 +61,6 @@ def integrate_rock_command(
     BASE_BRANCH: Branch to merge the PR into (e.g. main)
 
     ROCK_IMAGE: Image reference (e.g. ghcr.io/canonical/foo:1.0.0)
-
-    GITHUB_TOKEN: Optional GitHub token (will fall back to GH_TOKEN env var)
-
-    GITHUB_USERNAME: Optional GitHub username (defaults to '__token__' if not provided)
     """
     logger.info("Executing integrate-rock command")
 
@@ -62,19 +69,17 @@ def integrate_rock_command(
         if not token:
             raise click.ClickException("GitHub token not provided and GH_TOKEN not set.")
 
-        user = github_username or "__token__"
-
         integrate_rock_into_consumers(
             metadata_path=Path(metadata_file),
             rock_image=rock_image,
             clone_base_dir=Path(clone_dir),
             github_token=token,
-            github_username=user,
+            github_username=github_username,
             base_branch=base_branch,
             dry_run=dry_run,
         )
-    except Exception:
-        logger.exception("Failed to integrate rock image.")
+    except Exception as e:
+        logger.exception(f"Failed to integrate rock image: {e}")
         click.get_current_context().exit(1)
 
 

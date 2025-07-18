@@ -13,8 +13,9 @@ This tool is part of Canonical's Charmed Kubeflow stack and enables automated pu
 - ⚙️ Optionally modifies service-spec fields like `user` and `command`
 - 🔧 Validates metadata schemas for correctness before modification
 - 🤖 Opens pull requests with deterministic branches and templated descriptions
-- 🔐 Supports GitHub authentication via token
+- 🔐 Supports GitHub authentication via token or environment variable
 - 📦 Installable via PyPI and usable from CI pipelines
+- 🧪 Supports dry-run mode for previewing changes
 
 ---
 
@@ -41,27 +42,33 @@ poetry install
 After installing, the CLI provides a single command:
 
 ```bash
-chaci integrate-rock METADATA_FILE BASE_BRANCH ROCK_IMAGE [GITHUB_TOKEN] [GITHUB_USERNAME] [--clone-dir PATH]
+chaci integrate-rock METADATA_FILE BASE_BRANCH ROCK_IMAGE [OPTIONS]
 ```
 
 ### Example:
 
 ```bash
-export GH_TOKEN="ghp_abc123..."  # or pass explicitly
+export GH_TOKEN="ghp_abc123..."  # or pass explicitly with --github-token
 
-chaci integrate-rock rock-ci-metadata.yaml main ghcr.io/canonical/my-rock:1.0.0
+chaci integrate-rock rock-ci-metadata.yaml main ghcr.io/canonical/my-rock:1.0.0 --dry-run
 ```
 
 ### Arguments:
 
-| Argument        | Description                                                                 |
-|-----------------|-----------------------------------------------------------------------------|
-| `METADATA_FILE` | Path to `rock-ci-metadata.yaml` describing integration targets              |
-| `BASE_BRANCH`   | Target branch for PRs (e.g. `main` or `develop`)                            |
-| `ROCK_IMAGE`    | Full rock image string (e.g. `ghcr.io/org/my-rock:1.0.0`)                   |
-| `GITHUB_TOKEN`  | Optional. GitHub token. Falls back to `$GH_TOKEN` env var if not provided   |
-| `GITHUB_USERNAME` | Optional. GitHub username. Defaults to `"__token__"` if not provided      |
-| `--clone-dir`   | Optional. Directory where target repos will be cloned (default: `/tmp`)     |
+| Argument            | Description                                                                 |
+|---------------------|-----------------------------------------------------------------------------|
+| `METADATA_FILE`     | Path to `rock-ci-metadata.yaml` describing integration targets              |
+| `BASE_BRANCH`       | Target branch for PRs (e.g. `main` or `develop`)                            |
+| `ROCK_IMAGE`        | Full rock image string (e.g. `ghcr.io/org/my-rock:1.0.0`)                   |
+
+### Options:
+
+| Option                | Description                                                                                     |
+|------------------------|-------------------------------------------------------------------------------------------------|
+| `--github-token`       | Optional. GitHub token. Falls back to `$GH_TOKEN` environment variable if not provided.         |
+| `--github-username`    | Optional. GitHub username. Defaults to `"__token__"` if not provided.                           |
+| `--clone-dir PATH`     | Optional. Directory where target repos will be cloned (default: `/tmp`).                        |
+| `--dry-run`            | Optional. If set, changes are simulated but not committed or pushed. Logs changes to console.   |
 
 ---
 
@@ -158,8 +165,8 @@ tox -e lint,unit,integration
 | `rock_integrator.py`          | Core logic for modifying files with images   |
 | `git_client.py`               | Git and GitHub abstraction for PR workflow   |
 | `rock_metadata_handler.py`    | Orchestration for multi-repo integration     |
-| `rock_ci_metadata_schema.py` | JSON Schema used to validate metadata files  |
-| `cli.py`                      | CLI entrypoint via `click`                   |
+| `rock_ci_metadata_models.py` | Pydantic model for metadata schema validation|
+| `main.py`                     | CLI entrypoint via `click`                   |
 | `templates/pr_body.md.j2`     | Jinja2 template for pull request bodies      |
 
 ---
