@@ -1,5 +1,9 @@
 This PR was opened automatically by the `charmed-analytics-ci` library as part of the Rock CI system after the rock image was built and published.
+{% if triggering_pr %}
 
+🔗 Triggered by upstream PR: [{{ triggering_pr }}]({{ triggering_pr }})
+
+{% endif %}
 ## 🔧 Updated Rock References
 
 The following image paths were updated:

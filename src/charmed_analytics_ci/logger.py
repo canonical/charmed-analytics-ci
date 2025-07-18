@@ -20,7 +20,7 @@ class _LevelAwareFormatter(logging.Formatter):
 
 def setup_logger(
     name: str = "charmed_analytics_ci",
-    log_file_path: str = None,
+    log_file_path: str | None = None,
     file_log_level: int = logging.DEBUG,
     console_log_level: int = logging.INFO,
 ) -> logging.Logger:

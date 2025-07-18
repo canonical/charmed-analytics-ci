@@ -14,6 +14,7 @@ This tool is part of Canonical's Charmed Kubeflow stack and enables automated pu
 - 🔧 Validates metadata schemas for correctness before modification
 - 🤖 Opens pull requests with deterministic branches and templated descriptions
 - 🔐 Supports GitHub authentication via token or environment variable
+- 🔗 Optionally links back to triggering PR
 - 📦 Installable via PyPI and usable from CI pipelines
 - 🧪 Supports dry-run mode for previewing changes
 
@@ -63,12 +64,13 @@ chaci integrate-rock rock-ci-metadata.yaml main ghcr.io/canonical/my-rock:1.0.0 
 
 ### Options:
 
-| Option                | Description                                                                                     |
-|------------------------|-------------------------------------------------------------------------------------------------|
-| `--github-token`       | Optional. GitHub token. Falls back to `$GH_TOKEN` environment variable if not provided.         |
-| `--github-username`    | Optional. GitHub username. Defaults to `"__token__"` if not provided.                           |
-| `--clone-dir PATH`     | Optional. Directory where target repos will be cloned (default: `/tmp`).                        |
-| `--dry-run`            | Optional. If set, changes are simulated but not committed or pushed. Logs changes to console.   |
+| Option                  | Description                                                                                     |
+|--------------------------|-------------------------------------------------------------------------------------------------|
+| `--github-token`         | Optional. GitHub token. Falls back to `$GH_TOKEN` environment variable if not provided.         |
+| `--github-username`      | Optional. GitHub username. Defaults to `"__token__"` if not provided.                           |
+| `--clone-dir PATH`       | Optional. Directory where target repos will be cloned (default: `/tmp`).                        |
+| `--dry-run`              | Optional. If set, changes are simulated but not committed or pushed. Logs changes to console.   |
+| `--triggering-pr URL`    | Optional. Link to the PR which triggered this run. Included in the PR body if present.          |
 
 ---
 

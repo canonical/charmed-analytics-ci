@@ -43,27 +43,33 @@ def run_chaci(
     token: str,
     username: str = "test-user",
     tmpdir: Optional[Path] = None,
+    triggering_pr: Optional[str] = None,
 ) -> Tuple[subprocess.CompletedProcess[str], str, str, str]:
-    """Run the chaci CLI with a randomly generated tag for a fixed image base."""
+    """Run the chaci CLI with a randomly generated tag and optional triggering PR link."""
     rock_short_name = DEFAULT_IMAGE_BASE.split("/")[-1]
     rock_tag = str(uuid.uuid4())[:8]
     rock_image = f"{DEFAULT_IMAGE_BASE}:{rock_tag}"
 
     with tempfile.TemporaryDirectory() if tmpdir is None else tmpdir as clone_dir:
+        command = [
+            "chaci",
+            "integrate-rock",
+            str(metadata_path),
+            base_branch,
+            rock_image,
+            "--github-token",
+            token,
+            "--github-username",
+            username,
+            "--clone-dir",
+            str(clone_dir),
+        ]
+
+        if triggering_pr:
+            command += ["--triggering-pr", triggering_pr]
+
         result = subprocess.run(
-            [
-                "chaci",
-                "integrate-rock",
-                str(metadata_path),
-                base_branch,
-                rock_image,
-                "--github-token",
-                token,
-                "--github-username",
-                username,
-                "--clone-dir",
-                str(clone_dir),
-            ],
+            command,
             env={**os.environ, "GH_TOKEN": token},
             capture_output=True,
             text=True,
@@ -172,6 +178,35 @@ def _cleanup_pr(pr, github_client, pr_branch: str):
         github_client.get_git_ref(f"heads/{pr_branch}").delete()
     except Exception:
         pass
+
+
+def test_chaci_adds_triggering_pr_link_if_provided(
+    repo_info: dict,
+    github_client: Repository,
+) -> None:
+    """Test that chaci includes a link to the triggering PR when provided."""
+    metadata_file = Path(__file__).parent / "rock-ci-metadata.yaml"
+    triggering_pr_url = "https://github.com/example/repo/pull/123"
+
+    result, rock_short_name, rock_tag, _ = run_chaci(
+        metadata_path=metadata_file,
+        base_branch=repo_info["base_branch"],
+        token=repo_info["token"],
+        username=github_client.owner.login,
+        triggering_pr=triggering_pr_url,
+    )
+
+    pr_branch = f"integrate-{rock_short_name}-{rock_tag}"
+    pr_title = f"chore: integrate rock image {rock_short_name}:{rock_tag}"
+
+    assert result.returncode == 0, f"CLI failed:\n{result.stdout}\n{result.stderr}"
+
+    pr = None
+    try:
+        pr = _get_open_pr(github_client, pr_branch, pr_title)
+        assert triggering_pr_url in pr.body, "Expected triggering PR URL to be in the PR body"
+    finally:
+        _cleanup_pr(pr, github_client, pr_branch)
 
 
 # ---------------------- PARAMETRIZED FAILURE CASES ----------------------

@@ -162,7 +162,7 @@ def apply_integration(
             path_errors.append(f"{file_path}: {entry.path} -> {e}")
 
     # === Handle service-spec updates
-    for entry in integration.service_spec:
+    for entry in integration.service_spec or []:
         file_path = base_dir / entry.file
         if not file_path.exists():
             logger.warning(f"⚠️ Missing file for service-spec: {file_path}")

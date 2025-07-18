@@ -44,6 +44,12 @@ def main():
     default=False,
     help="Simulate integration without committing or opening PRs.",
 )
+@click.option(
+    "--triggering-pr",
+    type=str,
+    default=None,
+    help="URL of the GitHub PR that triggered this integration (for traceability).",
+)
 def integrate_rock_command(
     metadata_file: str,
     base_branch: str,
@@ -52,6 +58,7 @@ def integrate_rock_command(
     github_username: str,
     clone_dir: str,
     dry_run: bool,
+    triggering_pr: str | None,
 ) -> None:
     """
     Integrate a rock image into all consumers listed in the metadata file.
@@ -77,6 +84,7 @@ def integrate_rock_command(
             github_username=github_username,
             base_branch=base_branch,
             dry_run=dry_run,
+            triggering_pr=triggering_pr,
         )
     except Exception as e:
         logger.exception(f"Failed to integrate rock image: {e}")

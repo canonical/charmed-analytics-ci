@@ -286,3 +286,47 @@ def test_dry_run_skips_commit_and_pr(
     mock_client.commit_and_push.assert_not_called()
     mock_client.open_pull_request.assert_not_called()
     fake_repo.git.diff.assert_called_once()
+
+
+@mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
+def test_pr_template_receives_triggering_pr(
+    mock_validate_metadata,
+    mock_apply_integration,
+    mock_create_git_client,
+    mock_load_template,
+    metadata_file: Path,
+    tmp_path: Path,
+) -> None:
+    """Ensures the triggering PR URL is rendered into the PR template if provided."""
+    metadata = build_metadata(with_service_spec=True)
+    mock_validate_metadata.return_value = metadata
+    mock_apply_integration.return_value = IntegrationResult(
+        updated_files=[tmp_path / "file.yaml"],
+        missing_files=[],
+        path_errors=[],
+    )
+    mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
+    mock_create_git_client.return_value = mock_client
+
+    template_mock = mock.Mock()
+    mock_load_template.return_value = template_mock
+
+    triggering_pr = "https://github.com/canonical/rock/pull/77"
+
+    integrate_rock_into_consumers(
+        metadata_path=metadata_file,
+        rock_image="ghcr.io/org/foo:2.0.0",
+        clone_base_dir=tmp_path,
+        github_token="tok",
+        github_username="bot",
+        base_branch="main",
+        dry_run=True,
+        triggering_pr=triggering_pr,
+    )
+
+    template_mock.render.assert_called_once()
+    assert "triggering_pr" in template_mock.render.call_args.kwargs
+    assert template_mock.render.call_args.kwargs["triggering_pr"] == triggering_pr

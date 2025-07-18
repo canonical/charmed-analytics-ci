@@ -101,6 +101,7 @@ def integrate_rock_into_consumers(
     github_username: str,
     base_branch: str,
     dry_run: bool = False,
+    triggering_pr: str | None = None,
 ) -> None:
     """
     Integrate a rock image into multiple consumer repositories defined in a metadata file.
@@ -150,6 +151,7 @@ def integrate_rock_into_consumers(
             replace_image=replace_image,
             service_spec=service_spec_found,
             service_spec_missing=service_spec_missing,
+            triggering_pr=triggering_pr,
         )
 
         prepared_prs.append((client, commit_message, pr_title, pr_body))
