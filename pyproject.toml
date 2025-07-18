@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 [tool.poetry]
 name = "charmed-analytics-ci"
-version = "0.0.0"
+version = "1.0.0"
 description = "A CLI tool for automating CI tasks across Charmed Operator repositories"
 authors = ["Charmed Kubeflow"]
 license = "Apache-2.0"
