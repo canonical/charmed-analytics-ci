@@ -127,9 +127,9 @@ def test_chaci_success_opens_pr_and_cleans_up(
 
         # Validate that the HEAD commit is GPG signed
         commit = github_client.get_commit(pr.head.sha)
-        assert commit.commit.verification.verified, (
-            f"Expected signed commit, but verification failed: {commit.commit.verification.reason}"
-        )
+        assert (
+            commit.commit.verification.verified
+        ), f"Expected signed commit, but verification failed: {commit.commit.verification.reason}"
 
         changed_files = {f.filename: f for f in pr.get_files()}
         _assert_image_replacements(changed_files, github_client, pr_branch, metadata, rock_image)
