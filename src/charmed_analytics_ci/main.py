@@ -32,6 +32,12 @@ def main():
     help="GitHub username to use for authentication.",
 )
 @click.option(
+    "--github-email",
+    type=str,
+    default=None,
+    help="GitHub email to use for git commits (overrides default noreply format).",
+)
+@click.option(
     "--clone-dir",
     default="/tmp",
     show_default=True,
@@ -56,6 +62,7 @@ def integrate_rock_command(
     rock_image: str,
     github_token: str | None,
     github_username: str,
+    github_email: str | None,
     clone_dir: str,
     dry_run: bool,
     triggering_pr: str | None,
@@ -76,12 +83,19 @@ def integrate_rock_command(
         if not token:
             raise click.ClickException("GitHub token not provided and GH_TOKEN not set.")
 
+        email = (
+            github_email
+            or os.environ.get("GH_USER_EMAIL")
+            or f"{github_username}@users.noreply.github.com"
+        )
+
         integrate_rock_into_consumers(
             metadata_path=Path(metadata_file),
             rock_image=rock_image,
             clone_base_dir=Path(clone_dir),
             github_token=token,
             github_username=github_username,
+            github_email=email,
             base_branch=base_branch,
             dry_run=dry_run,
             triggering_pr=triggering_pr,

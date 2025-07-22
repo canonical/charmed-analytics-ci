@@ -5,6 +5,10 @@ on:
     secrets:
       CHACI_TEST_TOKEN:
         required: true
+      CHACI_GPG_PRIVATE:
+        required: true
+      CHACI_GPG_PASSPHRASE:
+        required: true
 
 jobs:
   lint:
@@ -15,6 +19,7 @@ jobs:
       - run: pipx install tox
       - name: Run linters
         run: tox -e lint
+
   unit-test:
     name: Unit tests
     runs-on: ubuntu-24.04
@@ -23,6 +28,7 @@ jobs:
       - run: pipx install tox
       - name: Run tests
         run: tox -e unit
+
   integration:
     name: Integration tests (microk8s)
     runs-on: ubuntu-24.04
@@ -30,8 +36,21 @@ jobs:
       CHACI_TEST_TOKEN: ${{ secrets.CHACI_TEST_TOKEN }}
       CHACI_TEST_REPO: canonical/test-kubeflow-automation
       CHACI_TEST_BASE_BRANCH: test-rocks-automation
+      CHACI_TEST_EMAIL: kubeflow-admin@lists.canonical.com
     steps:
       - uses: actions/checkout@v4
+
+      - name: Import and configure the GPG key for CHACI
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.CHACI_GPG_PRIVATE }}
+          passphrase: ${{ secrets.CHACI_GPG_PASSPHRASE }}
+          git_config_global: true
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_user_email: kubeflow-admin@lists.canonical.com
+
       - run: pipx install tox
+
       - name: Run integration tests
         run: tox -vve integration

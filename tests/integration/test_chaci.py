@@ -27,6 +27,7 @@ def repo_info() -> dict:
         "repo_full_name": os.environ["CHACI_TEST_REPO"],
         "token": os.environ["CHACI_TEST_TOKEN"],
         "base_branch": os.environ["CHACI_TEST_BASE_BRANCH"],
+        "email": os.environ["CHACI_TEST_EMAIL"],
     }
 
 
@@ -42,6 +43,7 @@ def run_chaci(
     base_branch: str,
     token: str,
     username: str = "test-user",
+    email: Optional[str] = None,
     tmpdir: Optional[Path] = None,
     triggering_pr: Optional[str] = None,
 ) -> Tuple[subprocess.CompletedProcess[str], str, str, str]:
@@ -67,6 +69,9 @@ def run_chaci(
 
         if triggering_pr:
             command += ["--triggering-pr", triggering_pr]
+
+        if email:
+            command += ["--github-email", email]
 
         result = subprocess.run(
             command,
@@ -107,6 +112,7 @@ def test_chaci_success_opens_pr_and_cleans_up(
         base_branch=repo_info["base_branch"],
         token=repo_info["token"],
         username=github_client.owner.login,
+        email=repo_info["email"],
     )
 
     pr_branch = f"integrate-{rock_short_name}-{rock_tag}"
@@ -118,6 +124,12 @@ def test_chaci_success_opens_pr_and_cleans_up(
     try:
         pr = _get_open_pr(github_client, pr_branch, pr_title)
         assert pr.body.strip() == expected_body
+
+        # Validate that the HEAD commit is GPG signed
+        commit = github_client.get_commit(pr.head.sha)
+        assert commit.commit.verification.verified, (
+            f"Expected signed commit, but verification failed: {commit.commit.verification.reason}"
+        )
 
         changed_files = {f.filename: f for f in pr.get_files()}
         _assert_image_replacements(changed_files, github_client, pr_branch, metadata, rock_image)
@@ -194,6 +206,7 @@ def test_chaci_adds_triggering_pr_link_if_provided(
         token=repo_info["token"],
         username=github_client.owner.login,
         triggering_pr=triggering_pr_url,
+        email=repo_info["email"],
     )
 
     pr_branch = f"integrate-{rock_short_name}-{rock_tag}"
@@ -233,6 +246,7 @@ def test_chaci_integration_failures(
             token=repo_info["token"],
             username="test-user",
             tmpdir=Path(tmpdir),
+            email=repo_info["email"],
         )
 
     assert result.returncode != 0, (

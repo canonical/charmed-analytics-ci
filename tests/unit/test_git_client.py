@@ -22,6 +22,7 @@ from charmed_analytics_ci.git_client import (
 )
 
 TEST_USERNAME = "testuser"
+TEST_EMAIL = "testuser@example.com"
 TEST_TOKEN = "ghp_exampletoken"
 TEST_URL = "https://github.com/testorg/testrepo.git"
 ALT_URL = "https://github.com/otherorg/wrongrepo.git"
@@ -66,7 +67,7 @@ def mock_github(monkeypatch) -> mock.MagicMock:
 
 def test_create_git_client_from_url_clones_when_missing(temp_repo_dir, mock_repo, mock_github):
     """It clones a repository if not found locally."""
-    creds = GitCredentials(TEST_USERNAME, TEST_TOKEN)
+    creds = GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
     client = create_git_client_from_url(TEST_URL, creds, clone_path=temp_repo_dir)
     assert isinstance(client, GitClient)
 
@@ -79,7 +80,7 @@ def test_create_git_client_from_url_uses_existing_repo_if_valid(
     repo_path.mkdir()
     mock_repo.remote.return_value.url = TEST_URL
 
-    creds = GitCredentials(TEST_USERNAME, TEST_TOKEN)
+    creds = GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
     client = create_git_client_from_url(TEST_URL, creds, clone_path=temp_repo_dir)
     assert isinstance(client, GitClient)
 
@@ -90,7 +91,7 @@ def test_create_git_client_from_url_fails_on_wrong_remote(temp_repo_dir, mock_re
     repo_path.mkdir()
     mock_repo.remote.return_value.url = ALT_URL
 
-    creds = GitCredentials(TEST_USERNAME, TEST_TOKEN)
+    creds = GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
     with pytest.raises(GitClientError, match="points to a different remote"):
         create_git_client_from_url(TEST_URL, creds, clone_path=temp_repo_dir)
 
@@ -103,14 +104,16 @@ def test_create_git_client_from_url_fails_to_clone(monkeypatch, temp_repo_dir):
     )
     monkeypatch.setattr("charmed_analytics_ci.git_client.Github", mock.Mock())
 
-    creds = GitCredentials(TEST_USERNAME, TEST_TOKEN)
+    creds = GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
     with pytest.raises(GitClientError, match="Failed to clone repository"):
         create_git_client_from_url(TEST_URL, creds, clone_path=temp_repo_dir)
 
 
 def test_checkout_branch_switches_if_exists(mock_repo):
     """It switches to an existing branch without error."""
-    client = GitClient(mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_TOKEN))
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
     client.checkout_branch(TEST_BRANCH)
     mock_repo.git.checkout.assert_called_once_with(TEST_BRANCH)
 
@@ -119,10 +122,11 @@ def test_checkout_branch_creates_if_missing(mock_repo, caplog):
     """It creates a new branch if it does not exist and logs the fallback."""
     stderr_message = "error: pathspec 'feature-branch' did not match any file(s) known to git"
     err = GitCommandError("checkout", 1, stderr=stderr_message)
-
     mock_repo.git.checkout.side_effect = [err, None]
 
-    client = GitClient(mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_TOKEN))
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
 
     with caplog.at_level("INFO"):
         client.checkout_branch(FEATURE_BRANCH)
@@ -133,22 +137,50 @@ def test_checkout_branch_creates_if_missing(mock_repo, caplog):
 
 
 def test_commit_and_push_executes_all_git_commands(mock_repo):
-    """It stages, commits, and pushes with correct arguments."""
+    """It stages, commits, and pushes with correct arguments (no signing)."""
     mock_repo.active_branch.name = TEST_BRANCH
-    client = GitClient(mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_TOKEN))
-    client.commit_and_push(COMMIT_MESSAGE)
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    client.commit_and_push(COMMIT_MESSAGE, sign=False)
     mock_repo.git.add.assert_called_once_with(A=True)
-    mock_repo.index.commit.assert_called_once_with(COMMIT_MESSAGE)
+    mock_repo.git.commit.assert_called_once()
     mock_repo.git.push.assert_called_once()
 
 
 def test_commit_and_push_force_push(mock_repo):
     """It supports force pushing changes."""
     mock_repo.active_branch.name = TEST_BRANCH
-    client = GitClient(mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_TOKEN))
-    client.commit_and_push(COMMIT_MESSAGE, force=True)
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    client.commit_and_push(COMMIT_MESSAGE, force=True, sign=False)
     push_args = mock_repo.git.push.call_args[0]
     assert "-f" in push_args
+
+
+def test_commit_and_push_signed_commit(mock_repo):
+    """It includes -S flag when signing commits."""
+    mock_repo.active_branch.name = TEST_BRANCH
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    client.commit_and_push(COMMIT_MESSAGE, sign=True)
+    commit_args = mock_repo.git.commit.call_args[0]
+    assert "-S" in commit_args
+    assert "-m" in commit_args
+    assert COMMIT_MESSAGE in commit_args
+
+
+def test_commit_and_push_unsigned_commit(mock_repo):
+    """It omits -S flag when not signing commits."""
+    mock_repo.active_branch.name = TEST_BRANCH
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    client.commit_and_push(COMMIT_MESSAGE, sign=False)
+    commit_args = mock_repo.git.commit.call_args[0]
+    assert "-S" not in commit_args
 
 
 def test_open_pull_request_success(mock_repo):
@@ -158,7 +190,9 @@ def test_open_pull_request_success(mock_repo):
     mock_gh_repo.get_pulls.return_value.totalCount = 0
     mock_repo.active_branch.name = FEATURE_BRANCH
 
-    client = GitClient(mock_repo, mock_gh_repo, GitCredentials(TEST_USERNAME, TEST_TOKEN))
+    client = GitClient(
+        mock_repo, mock_gh_repo, GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
     pr = client.open_pull_request(TEST_BRANCH, PR_TITLE, PR_BODY)
 
     mock_gh_repo.create_pull.assert_called_once_with(
@@ -180,7 +214,9 @@ def test_open_pull_request_duplicate(mock_repo):
     )
     mock_repo.active_branch.name = FEATURE_BRANCH
 
-    client = GitClient(mock_repo, mock_gh_repo, GitCredentials(TEST_USERNAME, TEST_TOKEN))
+    client = GitClient(
+        mock_repo, mock_gh_repo, GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
     with pytest.raises(PullRequestAlreadyExistsError) as exc_info:
         client.open_pull_request(TEST_BRANCH, PR_TITLE, PR_BODY)
     assert "pull/123" in str(exc_info.value)
@@ -216,11 +252,11 @@ def test_configure_git_sets_user_and_remote(monkeypatch):
     config_writer = mock.MagicMock()
     repo.config_writer.return_value.__enter__.return_value = config_writer
 
-    creds = GitCredentials(username="robot", token="s3cr3t")
+    creds = GitCredentials(username="robot", email="robot@dev.null", token="s3cr3t")
     _configure_git(repo, creds, "acme/myrepo")
 
     config_writer.set_value.assert_any_call("user", "name", "robot")
-    config_writer.set_value.assert_any_call("user", "email", "robot@users.noreply.github.com")
+    config_writer.set_value.assert_any_call("user", "email", "robot@dev.null")
 
     repo.remote().set_url.assert_called_once_with(
         "https://s3cr3t:x-oauth-basic@github.com/acme/myrepo.git"
@@ -231,6 +267,5 @@ def test_build_authenticated_url():
     """It returns the correct authenticated GitHub URL."""
     token = "ghp_exampletoken123"
     repo_name = "acme/rocket"
-
     expected_url = "https://ghp_exampletoken123:x-oauth-basic@github.com/acme/rocket.git"
     assert _build_authenticated_url(token, repo_name) == expected_url

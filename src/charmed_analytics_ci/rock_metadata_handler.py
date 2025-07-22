@@ -99,6 +99,7 @@ def integrate_rock_into_consumers(
     clone_base_dir: Path,
     github_token: str,
     github_username: str,
+    github_email: str | None,
     base_branch: str,
     dry_run: bool = False,
     triggering_pr: str | None = None,
@@ -117,7 +118,7 @@ def integrate_rock_into_consumers(
         repo_url = integration.consumer_repository
         logger.info(f"Preparing integration {i} → {repo_url} into base branch {base_branch}")
 
-        creds = GitCredentials(username=github_username, token=github_token)
+        creds = GitCredentials(username=github_username, email=github_email, token=github_token)
         client = create_git_client_from_url(repo_url, credentials=creds, clone_path=clone_base_dir)
         base_dir = Path(client.repo.working_dir)
 
