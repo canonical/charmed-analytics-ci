@@ -29,10 +29,12 @@ class GitCredentials:
 
     Attributes:
         username: GitHub username.
+        email: GitHub email address.
         token: Personal access token used for authentication.
     """
 
     username: str
+    email: str
     token: str
 
 
@@ -114,7 +116,11 @@ class GitClient:
                 raise GitClientError(f"Failed to checkout branch '{branch}': {e}") from e
 
     def commit_and_push(
-        self, commit_message: str, branch: Optional[str] = None, force: bool = False
+        self,
+        commit_message: str,
+        branch: Optional[str] = None,
+        force: bool = False,
+        sign: bool = True,
     ) -> None:
         """
         Stage all changes, commit them, and push to remote.
@@ -123,12 +129,21 @@ class GitClient:
             commit_message: The message to use for the commit.
             branch: Optional branch to switch to before committing.
             force: Whether to force-push changes.
+            sign: Whether to GPG-sign the commit.
         """
         if branch:
             self.checkout_branch(branch)
 
         self.repo.git.add(A=True)
-        self.repo.index.commit(commit_message)
+
+        commit_args = ["-m", commit_message]
+        if sign:
+            commit_args.insert(0, "-S")  # prepend -S to enable GPG signing
+
+        try:
+            self.repo.git.commit(*commit_args)
+        except GitCommandError as e:
+            raise GitClientError(f"Git commit failed: {e}") from e
 
         push_args = ["-u", "origin", self.current_branch]
         if force:
@@ -271,7 +286,7 @@ def _configure_git(repo: Repo, creds: GitCredentials, repo_name: str) -> None:
     """
     with repo.config_writer(config_level="repository") as config:
         config.set_value("user", "name", creds.username)
-        config.set_value("user", "email", f"{creds.username}@users.noreply.github.com")
+        config.set_value("user", "email", creds.email)
 
     remote_url = _build_authenticated_url(creds.token, repo_name)
     repo.remote().set_url(remote_url)

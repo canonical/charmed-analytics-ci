@@ -77,7 +77,7 @@ def test_errors_if_missing_non_service_files(
     mock_load_template,
     metadata_file: Path,
     tmp_path: Path,
-) -> None:
+):
     """Fails if non-service-spec files are missing in the integration result."""
     mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     missing_file = tmp_path / "file.yaml"
@@ -95,6 +95,7 @@ def test_errors_if_missing_non_service_files(
             clone_base_dir=tmp_path,
             github_token="token",
             github_username="bot",
+            github_email="bot@example.com",
             base_branch="main",
         )
 
@@ -110,7 +111,7 @@ def test_allows_missing_service_spec_files(
     mock_load_template,
     metadata_file: Path,
     tmp_path: Path,
-) -> None:
+):
     """Allows service-spec files to be missing without raising an error."""
     mock_validate_metadata.return_value = build_metadata()
     missing_file = tmp_path / "svc.yaml"
@@ -128,6 +129,7 @@ def test_allows_missing_service_spec_files(
         clone_base_dir=tmp_path,
         github_token="token",
         github_username="bot",
+        github_email="bot@example.com",
         base_branch="main",
     )
     mock_client.commit_and_push.assert_called_once()
@@ -145,7 +147,7 @@ def test_errors_if_path_errors_present(
     mock_load_template,
     metadata_file: Path,
     tmp_path: Path,
-) -> None:
+):
     """Raises error when invalid path expressions are found."""
     mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     mock_apply_integration.return_value = IntegrationResult(
@@ -162,6 +164,7 @@ def test_errors_if_path_errors_present(
             clone_base_dir=tmp_path,
             github_token="token",
             github_username="bot",
+            github_email="bot@example.com",
             base_branch="main",
         )
 
@@ -177,7 +180,7 @@ def test_errors_if_no_changes_detected(
     mock_load_template,
     metadata_file: Path,
     tmp_path: Path,
-) -> None:
+):
     """Raises error if integration produced no updated files."""
     mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     mock_apply_integration.return_value = IntegrationResult(
@@ -194,6 +197,7 @@ def test_errors_if_no_changes_detected(
             clone_base_dir=tmp_path,
             github_token="token",
             github_username="bot",
+            github_email="bot@example.com",
             base_branch="main",
         )
 
@@ -209,7 +213,7 @@ def test_creates_pr_after_successful_validation(
     mock_load_template,
     metadata_file: Path,
     tmp_path: Path,
-) -> None:
+):
     """Commits changes and opens a PR when integration is successful."""
     mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
     updated_file = tmp_path / "file.yaml"
@@ -226,6 +230,7 @@ def test_creates_pr_after_successful_validation(
         clone_base_dir=tmp_path,
         github_token="token",
         github_username="bot",
+        github_email="bot@example.com",
         base_branch="main",
     )
     mock_client.commit_and_push.assert_called_once()
@@ -242,7 +247,7 @@ def test_dry_run_skips_commit_and_pr(
     mock_create_git_client,
     mock_load_template,
     tmp_path: Path,
-) -> None:
+):
     """Dry-run mode skips commit and PR creation but still logs diff output."""
     metadata_file = tmp_path / "rock-ci-metadata.yaml"
     metadata_file.write_text("integrations: []")
@@ -279,6 +284,7 @@ def test_dry_run_skips_commit_and_pr(
         clone_base_dir=tmp_path,
         github_token="token",
         github_username="bot",
+        github_email="bot@example.com",
         base_branch="main",
         dry_run=True,
     )
@@ -299,7 +305,7 @@ def test_pr_template_receives_triggering_pr(
     mock_load_template,
     metadata_file: Path,
     tmp_path: Path,
-) -> None:
+):
     """Ensures the triggering PR URL is rendered into the PR template if provided."""
     metadata = build_metadata(with_service_spec=True)
     mock_validate_metadata.return_value = metadata
@@ -322,6 +328,7 @@ def test_pr_template_receives_triggering_pr(
         clone_base_dir=tmp_path,
         github_token="tok",
         github_username="bot",
+        github_email="bot@example.com",
         base_branch="main",
         dry_run=True,
         triggering_pr=triggering_pr,

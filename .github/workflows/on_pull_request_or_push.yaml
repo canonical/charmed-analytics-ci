@@ -12,3 +12,5 @@ jobs:
     uses: ./.github/workflows/tests.yaml
     secrets:
       CHACI_TEST_TOKEN: ${{ secrets.CHACI_TEST_TOKEN }}
+      CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
+      CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
