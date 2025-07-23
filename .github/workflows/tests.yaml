@@ -36,7 +36,7 @@ jobs:
       CHACI_TEST_TOKEN: ${{ secrets.CHACI_TEST_TOKEN }}
       CHACI_TEST_REPO: canonical/test-kubeflow-automation
       CHACI_TEST_BASE_BRANCH: test-rocks-automation
-      CHACI_TEST_EMAIL: kubeflow-admin@lists.canonical.com
+      CHACI_TEST_EMAIL: kubeflow-admin@lists.canonical.com # This email is used by git config, make sure it matches your GPG key's email
     steps:
       - uses: actions/checkout@v4
 
@@ -47,25 +47,31 @@ jobs:
           chmod 700 ~/.gnupg
 
           # Import the private GPG key
+          # The key material is securely passed from GitHub Secrets via standard input.
           echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
 
-          # Try to start gpg-agent, but allow it to fail if already running
-          gpg-agent --daemon --allow-loopback-pinentry --pinentry-program /usr/bin/pinentry-loopback > ~/.gnupg/gpg-agent.conf 2>&1 || true
+          # Try to start gpg-agent with loopback pinentry, but allow it to fail if already running.
+          # Redirect stderr to stdout (2>&1) and use '|| true' to prevent step failure if agent is already active.
+          gpg-agent --daemon --allow-loopback-pinentry --pinentry-program /usr/bin/pinentry-loopback > ~/.gnupg/gpg-agent.log 2>&1 || true
 
-          # Now, get the current agent info, whether it was just started or already running.
+          # Get the current gpg-agent information (like GPG_AGENT_INFO) and evaluate it in the shell.
+          # This ensures subsequent gpg commands can connect to the agent, whether it was just started or already running.
           eval "$(gpgconf --list-dirs agent-info)"
 
-          # Configure git to use the GPG key for signing
-          # Use the full User ID string as created for the key
+          # Configure Git to use the GPG key for signing.
+          # IMPORTANT: Use the full User ID string (name <email>) as it appears when you list your GPG key.
+          # Based on your output, this is "ckfbot <kubeflow-admin@lists.canonical.com>".
           git config --global user.signingkey "ckfbot <kubeflow-admin@lists.canonical.com>"
           git config --global commit.gpgsign true
-          git config --global user.email "kubeflow-admin@lists.canonical.com" # This is fine as it's just the email part
-          git config --global user.name "ckfbot" # Or a suitable name
+          git config --global user.email "${{ env.CHACI_TEST_EMAIL }}" # Ensure this matches the email part of your GPG key's User ID
+          git config --global user.name "GitHub Actions Bot" # A descriptive name for commits from the workflow
 
-          # Tell gpg-agent to cache the passphrase.
-          # Use the full User ID string as created for the key
+          # Prime the gpg-agent with the passphrase from secrets.
+          # This caches the passphrase so Git doesn't prompt for it on every commit.
+          # Again, use the full User ID for --local-user to correctly identify the key.
           echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --local-user "ckfbot <kubeflow-admin@lists.canonical.com>" --armor --sign -o /dev/null /dev/null
         env:
+          # GPG_TTY is often required for pinentry programs, even in non-interactive modes.
           GPG_TTY: /dev/tty
 
       - run: pipx install tox
