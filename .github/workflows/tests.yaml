@@ -40,38 +40,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Import and configure the GPG key
+      - name: Install gpg-preset-passphrase and configure GPG
         run: |
+          sudo install -m 755 -o root -g root /usr/lib/gnupg2/gpg-preset-passphrase /usr/bin/
+
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
 
           echo "$CHACI_GPG_PRIVATE" | gpg --batch --import
 
-          # Force loopback pinentry mode
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
           echo "use-agent" >> ~/.gnupg/gpg.conf
           echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
           echo RELOADAGENT | gpg-connect-agent
 
           export GPG_TTY=$(tty || echo not-a-tty)
-          export GPG_PASS="$CHACI_GPG_PASSPHRASE"
+          KEYGRIP=$(gpg --with-keygrip --list-secret-keys | awk '/Keygrip/ { print $2; exit }')
 
-          # Get key ID
+          # Load passphrase into agent
+          echo "$CHACI_GPG_PASSPHRASE" | /usr/bin/gpg-preset-passphrase --preset "$KEYGRIP"
+
           KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ { print $5; exit }')
+          echo -e "trust\n5\ny\nsave\n" | gpg --batch --yes --pinentry-mode loopback --command-fd 0 --edit-key "$KEY_ID"
 
-          # Trust the key non-interactively
-          echo -e "trust\n5\ny\nsave\n" | \
-            gpg --batch --yes --pinentry-mode loopback \
-                --passphrase "$GPG_PASS" \
-                --command-fd 0 --edit-key "$KEY_ID"
-
-          # Git config for signed commits
-          git config --global user.name "ckfbot"
+          git config --global user.name "Canonical CI Bot"
           git config --global user.email "$CHACI_TEST_EMAIL"
           git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
           git config --global gpg.program gpg
-
         env:
           CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
           CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
