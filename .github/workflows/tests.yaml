@@ -49,29 +49,28 @@ jobs:
           # Import the private GPG key
           echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
 
-          # Configure GPG to use a "passphrase file" or a "pinentry-loopback"
-          # We'll use pinentry-loopback, which allows the passphrase to be piped directly.
-          # This requires configuring gpg-agent.
+          # --- MODIFIED SECTION FOR GPG-AGENT ---
+          # Try to start gpg-agent, but allow it to fail if already running
+          # Redirect stderr to stdout to see messages, and then discard output
+          # If an agent is already running, this command will typically exit with a non-zero code.
+          # We append '|| true' to prevent the entire step from failing if gpg-agent reports it's already running.
+          gpg-agent --daemon --allow-loopback-pinentry --pinentry-program /usr/bin/pinentry-loopback > ~/.gnupg/gpg-agent.conf 2>&1 || true
 
-          # Start gpg-agent in a detached mode, if not already running
-          # (GitHub Actions environments usually start with a fresh state, but good to be explicit)
-          gpg-agent --daemon --allow-loopback-pinentry --pinentry-program /usr/bin/pinentry-loopback > ~/.gnupg/gpg-agent.conf
-          # Source the config to set up GPG_AGENT_INFO
-          source ~/.gnupg/gpg-agent.conf
+          # Now, get the current agent info, whether it was just started or already running.
+          # gpgconf --list-dirs returns the paths, including agent-info which contains the GPG_AGENT_INFO line.
+          # We need to ensure GPG_AGENT_INFO is set for subsequent gpg commands.
+          # This command ensures we always get the correct GPG_AGENT_INFO from the active agent.
+          eval "$(gpgconf --list-dirs agent-info)"
 
           # Configure git to use the GPG key for signing
           git config --global user.signingkey "${{ secrets.CHACI_TEST_EMAIL }}" # Replace with the actual GPG key ID if known, otherwise email associated with key
           git config --global commit.gpgsign true
           git config --global user.email "${{ env.CHACI_TEST_EMAIL }}" # Ensure this matches the GPG key's email
-          git config --global user.name "ckfbot" # Or a suitable name
+          git config --global user.name "GitHub Actions" # Or a suitable name
 
           # Tell gpg-agent to cache the passphrase.
-          # The passphrase will be provided once via --passphrase-fd 0
-          # This command ensures the key is in the agent's cache for subsequent signing operations.
-          # We use a dummy sign operation to prime the agent.
           echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --local-user "${{ secrets.CHACI_TEST_EMAIL }}" --armor --sign -o /dev/null /dev/null
         env:
-          # Set the GPG_TTY for tty-related interactions, useful for pinentry
           GPG_TTY: /dev/tty
 
       - run: pipx install tox
