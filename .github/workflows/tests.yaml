@@ -49,27 +49,22 @@ jobs:
           # Import the private GPG key
           echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
 
-          # --- MODIFIED SECTION FOR GPG-AGENT ---
           # Try to start gpg-agent, but allow it to fail if already running
-          # Redirect stderr to stdout to see messages, and then discard output
-          # If an agent is already running, this command will typically exit with a non-zero code.
-          # We append '|| true' to prevent the entire step from failing if gpg-agent reports it's already running.
           gpg-agent --daemon --allow-loopback-pinentry --pinentry-program /usr/bin/pinentry-loopback > ~/.gnupg/gpg-agent.conf 2>&1 || true
 
           # Now, get the current agent info, whether it was just started or already running.
-          # gpgconf --list-dirs returns the paths, including agent-info which contains the GPG_AGENT_INFO line.
-          # We need to ensure GPG_AGENT_INFO is set for subsequent gpg commands.
-          # This command ensures we always get the correct GPG_AGENT_INFO from the active agent.
           eval "$(gpgconf --list-dirs agent-info)"
 
           # Configure git to use the GPG key for signing
-          git config --global user.signingkey "${{ secrets.CHACI_TEST_EMAIL }}" # Replace with the actual GPG key ID if known, otherwise email associated with key
+          # Use the full User ID string as created for the key
+          git config --global user.signingkey "ckfbot <kubeflow-admin@lists.canonical.com>"
           git config --global commit.gpgsign true
-          git config --global user.email "${{ env.CHACI_TEST_EMAIL }}" # Ensure this matches the GPG key's email
-          git config --global user.name "GitHub Actions" # Or a suitable name
+          git config --global user.email "kubeflow-admin@lists.canonical.com" # This is fine as it's just the email part
+          git config --global user.name "ckfbot" # Or a suitable name
 
           # Tell gpg-agent to cache the passphrase.
-          echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --local-user "${{ secrets.CHACI_TEST_EMAIL }}" --armor --sign -o /dev/null /dev/null
+          # Use the full User ID string as created for the key
+          echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --local-user "ckfbot <kubeflow-admin@lists.canonical.com>" --armor --sign -o /dev/null /dev/null
         env:
           GPG_TTY: /dev/tty
 
