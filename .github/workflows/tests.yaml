@@ -16,9 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - run: pipx install tox
-
       - name: Run linters
         run: tox -e lint
 
@@ -27,9 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - run: pipx install tox
-
       - name: Run tests
         run: tox -e unit
 
@@ -41,36 +37,55 @@ jobs:
       CHACI_TEST_REPO: canonical/test-kubeflow-automation
       CHACI_TEST_BASE_BRANCH: test-rocks-automation
       CHACI_TEST_EMAIL: kubeflow-admin@lists.canonical.com
-      GPG_TTY: /dev/tty
-      CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
-      CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
-
     steps:
       - uses: actions/checkout@v4
 
-      - run: pipx install tox
-
-      - name: Set up GPG
+      - name: Import GPG key with passphrase support
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.CHACI_GPG_PRIVATE }}
+          GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
+          GIT_USER_EMAIL: kubeflow-admin@lists.canonical.com
+          GIT_USER_NAME: ckfbot
         run: |
-          echo "$CHACI_GPG_PRIVATE" | gpg --batch --import
+          set -euo pipefail
 
-          KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ {print $5; exit}')
-          echo "Using GPG key: $KEY_ID"
+          echo "Creating GPG home directory..."
+          export GNUPGHOME=$(mktemp -d)
+          chmod 700 "$GNUPGHOME"
 
-          mkdir -p ~/.gnupg
-          chmod 700 ~/.gnupg
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
-          echo RELOADAGENT | gpg-connect-agent
+          echo "Configuring gpg-agent to allow passphrase preset..."
+          echo "allow-preset-passphrase" > "$GNUPGHOME/gpg-agent.conf"
+          echo "default-cache-ttl 3600" >> "$GNUPGHOME/gpg-agent.conf"
+          echo "max-cache-ttl 31536000" >> "$GNUPGHOME/gpg-agent.conf"
 
-          echo "$CHACI_GPG_PASSPHRASE" | \
-            gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
-            --export-secret-keys "$KEY_ID" > /dev/null
+          echo "Reloading gpg-agent..."
+          gpgconf --kill gpg-agent
+          gpgconf --launch gpg-agent
 
-          git config --global user.name "Kubeflow Admin"
-          git config --global user.email "kubeflow-admin@lists.canonical.com"
-          git config --global user.signingkey "$KEY_ID"
+          echo "Importing GPG private key..."
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+
+          echo "Getting key fingerprint and keygrip..."
+          FINGERPRINT=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          KEYID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')
+          KEYGRIP=$(gpg --batch --with-colons --with-keygrip --list-secret-keys "$FINGERPRINT" | awk -F: '/^grp:/ {print $10; exit}')
+
+          echo "Setting trust level..."
+          echo "$FINGERPRINT:6:" | gpg --import-ownertrust
+
+          echo "Presetting passphrase in gpg-agent..."
+          HEX_PASSPHRASE=$(echo -n "$GPG_PASSPHRASE" | xxd -ps -u | tr -d '\n')
+          echo "PRESET_PASSPHRASE $KEYGRIP -1 $HEX_PASSPHRASE" | gpg-connect-agent --quiet
+
+          echo "Configuring Git..."
+          git config --global user.email "$GIT_USER_EMAIL"
+          git config --global user.name "$GIT_USER_NAME"
+          git config --global user.signingkey "$KEYID"
           git config --global commit.gpgsign true
 
-      - name: Run integration tests (tox handles wrapper)
-        run: tox -e integration -v
+          echo "GPG key successfully imported and configured with passphrase."
+
+      - run: pipx install tox
+
+      - name: Run integration tests
+        run: tox -vve integration
