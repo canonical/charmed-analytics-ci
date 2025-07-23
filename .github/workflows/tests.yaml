@@ -42,15 +42,17 @@ jobs:
       CHACI_TEST_BASE_BRANCH: test-rocks-automation
       CHACI_TEST_EMAIL: kubeflow-admin@lists.canonical.com
       GPG_TTY: /dev/tty
+      CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
+      CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
 
     steps:
       - uses: actions/checkout@v4
 
       - run: pipx install tox
 
-      - name: Run integration tests (with GPG setup)
+      - name: Set up GPG
         run: |
-          echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
+          echo "$CHACI_GPG_PRIVATE" | gpg --batch --import
 
           KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ {print $5; exit}')
           echo "Using GPG key: $KEY_ID"
@@ -61,7 +63,7 @@ jobs:
           echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
           echo RELOADAGENT | gpg-connect-agent
 
-          echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | \
+          echo "$CHACI_GPG_PASSPHRASE" | \
             gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
             --export-secret-keys "$KEY_ID" > /dev/null
 
@@ -70,12 +72,5 @@ jobs:
           git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
 
-          # Copy wrapper into tox integration env and use absolute path
-          WRAPPER_PATH=$(pwd)/scripts/gpg-wrapper.sh
-          TOX_WRAPPER_PATH=$(pwd)/.tox/integration/bin/gpg-wrapper.sh
-          cp "$WRAPPER_PATH" "$TOX_WRAPPER_PATH"
-          chmod +x "$TOX_WRAPPER_PATH"
-
-          git config --global gpg.program "$TOX_WRAPPER_PATH"
-
-          tox -vve integration
+      - name: Run integration tests (tox handles wrapper)
+        run: tox -e integration -v
