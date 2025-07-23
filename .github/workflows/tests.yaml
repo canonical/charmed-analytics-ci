@@ -69,6 +69,13 @@ jobs:
           git config --global user.email "kubeflow-admin@lists.canonical.com"
           git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
-          git config --global gpg.program "$(pwd)/scripts/gpg-wrapper.sh"
+
+          # Copy wrapper into tox integration env and use absolute path
+          WRAPPER_PATH=$(pwd)/scripts/gpg-wrapper.sh
+          TOX_WRAPPER_PATH=$(pwd)/.tox/integration/bin/gpg-wrapper.sh
+          cp "$WRAPPER_PATH" "$TOX_WRAPPER_PATH"
+          chmod +x "$TOX_WRAPPER_PATH"
+
+          git config --global gpg.program "$TOX_WRAPPER_PATH"
 
           tox -vve integration
