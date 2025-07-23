@@ -40,53 +40,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install gpg-preset-passphrase
+      - name: Set up GPG key and passphrase
         run: |
-          if ! command -v gpg-preset-passphrase &>/dev/null; then
-            sudo install -m 755 -o root -g root /usr/lib/gnupg2/gpg-preset-passphrase /usr/bin/
-          fi
-
-      - name: Setup GPG and Git commit signing
-        run: |
+          # Create a directory for GnuPG configuration
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
 
-          # Configure gpg-agent
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
-          echo "use-agent" >> ~/.gnupg/gpg.conf
-          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          # Import the private GPG key
+          echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
 
-          gpgconf --kill gpg-agent
-          gpgconf --launch gpg-agent
+          # Configure GPG to use a "passphrase file" or a "pinentry-loopback"
+          # We'll use pinentry-loopback, which allows the passphrase to be piped directly.
+          # This requires configuring gpg-agent.
 
-          # Import the private key
-          if echo "$CHACI_GPG_PRIVATE" | grep -q '^-----BEGIN PGP'; then
-            echo "$CHACI_GPG_PRIVATE" | gpg --batch --import
-          else
-            echo "$CHACI_GPG_PRIVATE" | base64 --decode | gpg --batch --import
-          fi
+          # Start gpg-agent in a detached mode, if not already running
+          # (GitHub Actions environments usually start with a fresh state, but good to be explicit)
+          gpg-agent --daemon --allow-loopback-pinentry --pinentry-program /usr/bin/pinentry-loopback > ~/.gnupg/gpg-agent.conf
+          # Source the config to set up GPG_AGENT_INFO
+          source ~/.gnupg/gpg-agent.conf
 
-          # Extract key fingerprint and keygrip
-          FINGERPRINT=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
-          KEYGRIP=$(gpg --with-keygrip --list-secret-keys "$FINGERPRINT" | awk '/Keygrip/ {print $2; exit}')
-
-          # Cache passphrase in gpg-agent
-          echo "$CHACI_GPG_PASSPHRASE" | /usr/bin/gpg-preset-passphrase --preset "$KEYGRIP"
-
-          # Set trust level to ultimate (5)
-          echo -e "trust\n5\ny\nsave" | gpg --batch --yes --pinentry-mode loopback --command-fd 0 --edit-key "$FINGERPRINT"
-
-          # Git configuration for commit signing
-          git config --global user.name "Canonical CI Bot"
-          git config --global user.email "$CHACI_TEST_EMAIL"
-          git config --global user.signingkey "$FINGERPRINT"
+          # Configure git to use the GPG key for signing
+          git config --global user.signingkey "${{ secrets.CHACI_TEST_EMAIL }}" # Replace with the actual GPG key ID if known, otherwise email associated with key
           git config --global commit.gpgsign true
-          git config --global gpg.program gpg
+          git config --global user.email "${{ env.CHACI_TEST_EMAIL }}" # Ensure this matches the GPG key's email
+          git config --global user.name "ckfbot" # Or a suitable name
+
+          # Tell gpg-agent to cache the passphrase.
+          # The passphrase will be provided once via --passphrase-fd 0
+          # This command ensures the key is in the agent's cache for subsequent signing operations.
+          # We use a dummy sign operation to prime the agent.
+          echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --local-user "${{ secrets.CHACI_TEST_EMAIL }}" --armor --sign -o /dev/null /dev/null
         env:
-          CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
-          CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
-          CHACI_TEST_EMAIL: ${{ env.CHACI_TEST_EMAIL }}
+          # Set the GPG_TTY for tty-related interactions, useful for pinentry
+          GPG_TTY: /dev/tty
 
       - run: pipx install tox
 
