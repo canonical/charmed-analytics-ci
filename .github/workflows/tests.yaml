@@ -37,38 +37,36 @@ jobs:
       CHACI_TEST_REPO: canonical/test-kubeflow-automation
       CHACI_TEST_BASE_BRANCH: test-rocks-automation
       CHACI_TEST_EMAIL: kubeflow-admin@lists.canonical.com
+      GPG_TTY: /dev/tty
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up GPG key and passphrase
+      - run: pipx install tox
+
+      - name: Run integration tests (with GPG setup)
         run: |
+          # Setup GPG for signing
+          echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
+
+          KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ {print $5; exit}')
+          echo "Using GPG key: $KEY_ID"
+
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
 
-          echo "${{ secrets.CHACI_GPG_PRIVATE }}" | gpg --batch --import
-
-          gpgconf --kill gpg-agent || true
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          echo "pinentry-program /usr/bin/pinentry-loopback" >> ~/.gnupg/gpg-agent.conf
-          gpgconf --launch gpg-agent
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          echo RELOADAGENT | gpg-connect-agent
 
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "${{ env.CHACI_TEST_EMAIL }}"
-          git config --global user.signingkey "ckfbot <${{ env.CHACI_TEST_EMAIL }})"
+          echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | \
+            gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --export-secret-keys "$KEY_ID" > /dev/null
+
+          git config --global user.name "Kubeflow Admin"
+          git config --global user.email "kubeflow-admin@lists.canonical.com"
+          git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
-          git config --global gpg.program gpg
 
-          # Prime the gpg-agent to avoid tty issues
-          echo "${{ secrets.CHACI_GPG_PASSPHRASE }}" | gpg \
-            --batch --yes \
-            --passphrase-fd 0 \
-            --pinentry-mode loopback \
-            --local-user "ckfbot <${{ env.CHACI_TEST_EMAIL }})" \
-            --armor --sign -o /dev/null /dev/null
-        env:
-          GPG_TTY: $(tty || echo not-a-tty)
-
-      - run: pipx install tox
-
-      - name: Run integration tests
-        run: tox -vve integration
+          # Run the integration tests (commits will be signed if needed)
+          tox -vve integration
