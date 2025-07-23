@@ -40,34 +40,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install gpg-preset-passphrase and configure GPG
+      - name: Install gpg-preset-passphrase
         run: |
-          sudo install -m 755 -o root -g root /usr/lib/gnupg2/gpg-preset-passphrase /usr/bin/
+          if ! command -v gpg-preset-passphrase &>/dev/null; then
+            sudo install -m 755 -o root -g root /usr/lib/gnupg2/gpg-preset-passphrase /usr/bin/
+          fi
 
+      - name: Import and configure GPG key for signing
+        run: |
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
 
-          echo "$CHACI_GPG_PRIVATE" | gpg --batch --import
-
+          # Configure gpg and gpg-agent for CI
+          echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
           echo "use-agent" >> ~/.gnupg/gpg.conf
           echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
-          echo RELOADAGENT | gpg-connect-agent
 
-          export GPG_TTY=$(tty || echo not-a-tty)
+          # Restart gpg-agent to pick up changes
+          gpgconf --kill gpg-agent
+          gpgconf --launch gpg-agent
+
+          # Import the private key
+          echo "$CHACI_GPG_PRIVATE" | gpg --batch --import
+
+          # Extract keygrip and preset passphrase
           KEYGRIP=$(gpg --with-keygrip --list-secret-keys | awk '/Keygrip/ { print $2; exit }')
-
-          # Load passphrase into agent
           echo "$CHACI_GPG_PASSPHRASE" | /usr/bin/gpg-preset-passphrase --preset "$KEYGRIP"
 
+          # Get key ID for Git config
           KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ { print $5; exit }')
+
+          # Trust the key non-interactively
           echo -e "trust\n5\ny\nsave\n" | gpg --batch --yes --pinentry-mode loopback --command-fd 0 --edit-key "$KEY_ID"
 
+          # Configure Git for signed commits
           git config --global user.name "Canonical CI Bot"
           git config --global user.email "$CHACI_TEST_EMAIL"
           git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
           git config --global gpg.program gpg
+
         env:
           CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
           CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
