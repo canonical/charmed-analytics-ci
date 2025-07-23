@@ -49,17 +49,21 @@ jobs:
 
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
           echo "use-agent" >> ~/.gnupg/gpg.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
           echo RELOADAGENT | gpg-connect-agent
 
           export GPG_TTY=$(tty)
 
-          # Extract key ID
           KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ { print $5; exit }')
+          echo -e "5\ny\n" | gpg --command-fd 0 --expert --edit-key "$KEY_ID" trust
 
-          git config --global user.name "Canonical CI Bot"
+          git config --global user.name "ckfbot"
           git config --global user.email "$CHACI_TEST_EMAIL"
           git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
+          git config --global gpg.program gpg
+          git config --global gpg.passphrase "$CHACI_GPG_PASSPHRASE"
+          git config --global gpg.pinentry-mode loopback
         env:
           CHACI_GPG_PRIVATE: ${{ secrets.CHACI_GPG_PRIVATE }}
           CHACI_GPG_PASSPHRASE: ${{ secrets.CHACI_GPG_PASSPHRASE }}
