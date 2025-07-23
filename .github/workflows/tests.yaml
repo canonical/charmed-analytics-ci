@@ -69,6 +69,6 @@ jobs:
           git config --global user.email "kubeflow-admin@lists.canonical.com"
           git config --global user.signingkey "$KEY_ID"
           git config --global commit.gpgsign true
-          git config --global gpg.program ./scripts/gpg-wrapper.sh
+          git config --global gpg.program "$(pwd)/scripts/gpg-wrapper.sh"
 
           tox -vve integration
