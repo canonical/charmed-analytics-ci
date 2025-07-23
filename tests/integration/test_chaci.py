@@ -47,7 +47,29 @@ def run_chaci(
     tmpdir: Optional[Path] = None,
     triggering_pr: Optional[str] = None,
 ) -> Tuple[subprocess.CompletedProcess[str], str, str, str]:
-    """Run the chaci CLI with a randomly generated tag and optional triggering PR link."""
+    """
+    Run the CHACI CLI tool to integrate a rock image into a given base branch.
+
+    This function generates a unique tag for the rock image, constructs the `chaci integrate-rock`
+    command, and runs it in a temporary or specified clone directory. It also supports passing
+    an optional triggering PR link and GitHub email.
+
+    Args:
+        metadata_path: Path to the rock metadata YAML file.
+        base_branch: Target branch into which the rock should be integrated.
+        token: GitHub personal access token for authentication.
+        username: GitHub username used for commit attribution (default: "test-user").
+        email: Optional GitHub email address for signed commits.
+        tmpdir: Optional directory to use for cloning; a temporary one is created if not provided.
+        triggering_pr: Optional URL of the triggering pull request to link in the integration.
+
+    Returns:
+        A tuple containing:
+            - The completed subprocess result of running the `chaci` command.
+            - The short name of the rock image.
+            - The randomly generated image tag.
+            - The full rock image reference (e.g., "ghcr.io/org/image:tag").
+    """
     rock_short_name = DEFAULT_IMAGE_BASE.split("/")[-1]
     rock_tag = str(uuid.uuid4())[:8]
     rock_image = f"{DEFAULT_IMAGE_BASE}:{rock_tag}"
