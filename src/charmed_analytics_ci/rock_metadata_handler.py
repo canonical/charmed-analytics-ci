@@ -117,7 +117,7 @@ def integrate_rock_into_consumers(
             metadata_path,
         )
         return
-    
+
     _, rock_tag, rock_short_name = parse_rock_image(rock_image)
     pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
 
