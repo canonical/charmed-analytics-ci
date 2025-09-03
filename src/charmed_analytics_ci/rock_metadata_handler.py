@@ -108,6 +108,16 @@ def integrate_rock_into_consumers(
     Integrate a rock image into multiple consumer repositories defined in a metadata file.
     """
     metadata: RockCIMetadata = load_metadata_file(metadata_path)
+
+    if not metadata.integrations:
+        logger.warning(
+            "No integrations found in metadata file '%s'. "
+            "Nothing will be integrated. "
+            "If this is unexpected, check your rock-ci-metadata.yaml.",
+            metadata_path,
+        )
+        return
+
     _, rock_tag, rock_short_name = parse_rock_image(rock_image)
     pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
 

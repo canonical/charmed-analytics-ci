@@ -40,10 +40,10 @@ def test_missing_integrations():
         RockCIMetadata.model_validate({})
 
 
-def test_empty_integrations():
-    """Should fail when 'integrations' is an empty list."""
-    with pytest.raises(ValidationError, match=r"List should have at least 1 item.*too_short"):
-        RockCIMetadata.model_validate({"integrations": []})
+def test_empty_integrations_allowed():
+    """Should succeed when 'integrations' is an empty list."""
+    model = RockCIMetadata.model_validate({"integrations": []})
+    assert model.integrations == []
 
 
 def test_missing_replace_image():

@@ -102,4 +102,4 @@ class RockCIMetadata(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    integrations: List[IntegrationEntry] = Field(min_length=1)
+    integrations: List[IntegrationEntry] = Field(min_length=0)
