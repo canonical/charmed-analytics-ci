@@ -81,7 +81,7 @@ def test_apply_integration_success(
 
     result: IntegrationResult = apply_integration(
         metadata_path=valid_metadata_file,
-        rock_image=ROCK_IMAGE,
+        rock_images=[ROCK_IMAGE],
         base_dir=base_dir,
         integration_index=0,
     )
@@ -102,7 +102,7 @@ def test_missing_file_error(valid_metadata_file: Path, temp_dir: Path) -> None:
     """Ensure missing files are detected and reported properly."""
     result = apply_integration(
         metadata_path=valid_metadata_file,
-        rock_image=ROCK_IMAGE,
+        rock_images=[ROCK_IMAGE],
         base_dir=temp_dir,
         integration_index=0,
     )
@@ -116,10 +116,105 @@ def test_invalid_integration_index(valid_metadata_file: Path) -> None:
     with pytest.raises(IndexError):
         apply_integration(
             metadata_path=valid_metadata_file,
-            rock_image=ROCK_IMAGE,
+            rock_images=[ROCK_IMAGE],
             base_dir=valid_metadata_file.parent,
             integration_index=99,
         )
+
+
+# ─────────────────────────────────────────────
+# Multiple rock image handling
+# ─────────────────────────────────────────────
+
+
+MULTI_IMAGE_METADATA = {
+    "integrations": [
+        {
+            "consumer-repository": "https://github.com/canonical/example",
+            "replace-image": [
+                {"file": "a.yaml", "path": "spec.image", "name": "rock-a"},
+                {"file": "b.yaml", "path": "spec.image", "name": "rock-b"},
+            ],
+        }
+    ]
+}
+
+
+@pytest.fixture
+def multi_image_metadata_file(temp_dir: Path) -> Path:
+    """Write metadata with two named replace-image entries."""
+    metadata_path = temp_dir / "rock-ci-metadata.yaml"
+    metadata_path.write_text(yaml.dump(MULTI_IMAGE_METADATA))
+    return metadata_path
+
+
+@pytest.fixture
+def multi_image_files(temp_dir: Path) -> tuple[Path, Path]:
+    """Create the two target files referenced by the multi-image metadata."""
+    a_yaml = temp_dir / "a.yaml"
+    a_yaml.write_text(yaml.dump({"spec": {"image": "old-a"}}))
+    b_yaml = temp_dir / "b.yaml"
+    b_yaml.write_text(yaml.dump({"spec": {"image": "old-b"}}))
+    return a_yaml, b_yaml
+
+
+def test_multiple_images_matched_by_name(
+    multi_image_metadata_file: Path, multi_image_files: tuple[Path, Path]
+) -> None:
+    """Each named entry is updated with its matching rock image."""
+    base_dir = multi_image_metadata_file.parent
+    image_a = "ghcr.io/canonical/rock-a:1.0.0"
+    image_b = "ghcr.io/canonical/rock-b:2.0.0"
+
+    result = apply_integration(
+        metadata_path=multi_image_metadata_file,
+        rock_images=[image_a, image_b],
+        base_dir=base_dir,
+        integration_index=0,
+    )
+
+    assert len(result.updated_files) == 2
+    assert result.path_errors == []
+    assert {u.image for u in result.image_updates} == {image_a, image_b}
+
+    assert yaml.safe_load((base_dir / "a.yaml").read_text())["spec"]["image"] == image_a
+    assert yaml.safe_load((base_dir / "b.yaml").read_text())["spec"]["image"] == image_b
+
+
+def test_unmatched_named_entries_are_skipped(
+    multi_image_metadata_file: Path, multi_image_files: tuple[Path, Path]
+) -> None:
+    """Only entries whose name matches a provided image are updated; others are left untouched."""
+    base_dir = multi_image_metadata_file.parent
+    image_a = "ghcr.io/canonical/rock-a:1.0.0"
+
+    result = apply_integration(
+        metadata_path=multi_image_metadata_file,
+        rock_images=[image_a],
+        base_dir=base_dir,
+        integration_index=0,
+    )
+
+    assert [u.name for u in result.image_updates] == ["rock-a"]
+    assert result.path_errors == []
+    assert yaml.safe_load((base_dir / "a.yaml").read_text())["spec"]["image"] == image_a
+    assert yaml.safe_load((base_dir / "b.yaml").read_text())["spec"]["image"] == "old-b"
+
+
+def test_nameless_entry_with_multiple_images_reports_error(
+    valid_metadata_file: Path, test_files: tuple[Path, Path]
+) -> None:
+    """A nameless entry is ambiguous when several images are provided and yields a path error."""
+    base_dir = valid_metadata_file.parent
+
+    result = apply_integration(
+        metadata_path=valid_metadata_file,
+        rock_images=["ghcr.io/canonical/rock-a:1.0.0", "ghcr.io/canonical/rock-b:2.0.0"],
+        base_dir=base_dir,
+        integration_index=0,
+    )
+
+    assert any("no 'name'" in err for err in result.path_errors)
 
 
 # ─────────────────────────────────────────────

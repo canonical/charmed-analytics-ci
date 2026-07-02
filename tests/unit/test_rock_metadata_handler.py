@@ -91,7 +91,7 @@ def test_errors_if_missing_non_service_files(
     with pytest.raises(RuntimeError, match="missing expected files"):
         integrate_rock_into_consumers(
             metadata_path=metadata_file,
-            rock_image="rock/image:1.0.0",
+            rock_images=["rock/image:1.0.0"],
             clone_base_dir=tmp_path,
             github_token="token",
             github_username="bot",
@@ -125,7 +125,7 @@ def test_allows_missing_service_spec_files(
 
     integrate_rock_into_consumers(
         metadata_path=metadata_file,
-        rock_image="rock/image:1.0.0",
+        rock_images=["rock/image:1.0.0"],
         clone_base_dir=tmp_path,
         github_token="token",
         github_username="bot",
@@ -160,7 +160,7 @@ def test_errors_if_path_errors_present(
     with pytest.raises(RuntimeError, match="invalid path expressions"):
         integrate_rock_into_consumers(
             metadata_path=metadata_file,
-            rock_image="rock/image:1.0.0",
+            rock_images=["rock/image:1.0.0"],
             clone_base_dir=tmp_path,
             github_token="token",
             github_username="bot",
@@ -193,7 +193,7 @@ def test_errors_if_no_changes_detected(
     with pytest.raises(RuntimeError, match="no changes detected"):
         integrate_rock_into_consumers(
             metadata_path=metadata_file,
-            rock_image="rock/image:1.0.0",
+            rock_images=["rock/image:1.0.0"],
             clone_base_dir=tmp_path,
             github_token="token",
             github_username="bot",
@@ -226,7 +226,7 @@ def test_creates_pr_after_successful_validation(
 
     integrate_rock_into_consumers(
         metadata_path=metadata_file,
-        rock_image="rock/image:1.0.0",
+        rock_images=["rock/image:1.0.0"],
         clone_base_dir=tmp_path,
         github_token="token",
         github_username="bot",
@@ -280,7 +280,7 @@ def test_dry_run_skips_commit_and_pr(
 
     integrate_rock_into_consumers(
         metadata_path=metadata_file,
-        rock_image="rock/image:1.0.0",
+        rock_images=["rock/image:1.0.0"],
         clone_base_dir=tmp_path,
         github_token="token",
         github_username="bot",
@@ -324,7 +324,7 @@ def test_pr_template_receives_triggering_pr(
 
     integrate_rock_into_consumers(
         metadata_path=metadata_file,
-        rock_image="ghcr.io/org/foo:2.0.0",
+        rock_images=["ghcr.io/org/foo:2.0.0"],
         clone_base_dir=tmp_path,
         github_token="tok",
         github_username="bot",

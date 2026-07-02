@@ -3,6 +3,7 @@
 
 from importlib.resources import files
 from pathlib import Path
+from typing import List
 
 from jinja2 import Template
 
@@ -13,6 +14,7 @@ from charmed_analytics_ci.rock_integrator import (
     IntegrationResult,
     apply_integration,
     load_metadata_file,
+    parse_rock_image,
 )
 
 logger = setup_logger(__name__)
@@ -22,31 +24,6 @@ def _load_pr_template() -> Template:
     """Load and return the Jinja2 template for PR description from the package resources."""
     template_path = files("charmed_analytics_ci.templates").joinpath("pr_body.md.j2")
     return Template(template_path.read_text())
-
-
-def parse_rock_image(rock_image: str) -> tuple[str, str, str]:
-    """
-    Parse a rock image string into name, tag, and short name.
-
-    Args:
-        rock_image: A string like 'ghcr.io/canonical/my-rock:1.2.3'
-
-    Returns:
-        Tuple of (full_name, tag, short_name)
-
-    Raises:
-        ValueError: If the image string is not in the expected format.
-    """
-    if ":" not in rock_image:
-        raise ValueError(f"Invalid rock image format (missing tag): '{rock_image}'")
-
-    full_name, tag = rock_image.rsplit(":", 1)
-    short_name = full_name.split("/")[-1]
-
-    if not full_name or not tag:
-        raise ValueError(f"Invalid rock image format: '{rock_image}'")
-
-    return full_name, tag, short_name
 
 
 def validate_integration_result(
@@ -93,9 +70,30 @@ def validate_integration_result(
         )
 
 
+def _build_branch_and_description(rock_images: List[str]) -> tuple[str, str]:
+    """
+    Build a deterministic PR branch name and a human-readable image description.
+
+    Args:
+        rock_images: One or more rock image strings.
+
+    Returns:
+        Tuple of (branch_name, images_description). For a single image the branch keeps the
+        historical ``integrate-<short>-<tag>`` form; for several images the short names and
+        tags are joined in a stable, sorted order.
+    """
+    parsed = sorted(
+        (parse_rock_image(image) for image in rock_images),
+        key=lambda item: (item[2], item[1]),
+    )
+    branch = "integrate-" + "-".join(f"{short}-{tag}" for _, tag, short in parsed)
+    description = ", ".join(f"{short}:{tag}" for _, tag, short in parsed)
+    return branch, description
+
+
 def integrate_rock_into_consumers(
     metadata_path: Path,
-    rock_image: str,
+    rock_images: List[str],
     clone_base_dir: Path,
     github_token: str,
     github_username: str,
@@ -105,7 +103,10 @@ def integrate_rock_into_consumers(
     triggering_pr: str | None = None,
 ) -> None:
     """
-    Integrate a rock image into multiple consumer repositories defined in a metadata file.
+    Integrate one or more rock images into consumer repositories defined in a metadata file.
+
+    All provided images that match a repository's ``replace-image`` entries are bundled into a
+    single pull request per consumer repository.
     """
     metadata: RockCIMetadata = load_metadata_file(metadata_path)
 
@@ -118,8 +119,11 @@ def integrate_rock_into_consumers(
         )
         return
 
-    _, rock_tag, rock_short_name = parse_rock_image(rock_image)
-    pr_branch_name = f"integrate-{rock_short_name}-{rock_tag}"
+    if not rock_images:
+        raise ValueError("At least one rock image must be provided.")
+
+    pr_branch_name, images_description = _build_branch_and_description(rock_images)
+    image_noun = "image" if len(rock_images) == 1 else "images"
 
     pr_template = _load_pr_template()
     prepared_prs = []
@@ -136,7 +140,7 @@ def integrate_rock_into_consumers(
 
         result = apply_integration(
             metadata_path=metadata_path,
-            rock_image=rock_image,
+            rock_images=rock_images,
             base_dir=base_dir,
             integration_index=i,
         )
@@ -144,10 +148,18 @@ def integrate_rock_into_consumers(
         validate_integration_result(result, i, repo_url, integration, base_dir)
 
         # Construct PR title and message
-        pr_title = f"chore: integrate rock image {rock_short_name}:{rock_tag}"
+        pr_title = f"chore: integrate rock {image_noun} {images_description}"
         commit_message = pr_title
 
-        replace_image = [entry.model_dump() for entry in integration.replace_image]
+        replace_image = [
+            {
+                "file": str(update.file),
+                "path": update.path,
+                "image": update.image,
+                "name": update.name,
+            }
+            for update in result.image_updates
+        ]
         service_spec_all = [entry.model_dump() for entry in integration.service_spec or []]
         missing_files = set(result.missing_files)
 

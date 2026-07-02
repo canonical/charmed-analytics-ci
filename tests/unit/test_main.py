@@ -45,9 +45,42 @@ def test_cli_success_basic(
     args = mock_integrate.call_args.kwargs
     assert args["github_token"] == "gh-token-123"
     assert args["github_username"] == "cli-tester"
-    assert args["rock_image"] == "ghcr.io/example/my-rock:1.2.3"
+    assert args["rock_images"] == ["ghcr.io/example/my-rock:1.2.3"]
     assert args["dry_run"] is True
     assert args["triggering_pr"] is None
+
+
+@mock.patch("charmed_analytics_ci.main.integrate_rock_into_consumers")
+def test_cli_accepts_multiple_rock_images(
+    mock_integrate: mock.MagicMock, runner: CliRunner, tmp_path: Path
+) -> None:
+    """
+    Test CLI bundles every positional rock image into a single list.
+    """
+    metadata_file = tmp_path / "metadata.yaml"
+    metadata_file.write_text("fake: content")
+
+    result: Result = runner.invoke(
+        main,
+        [
+            "integrate-rock",
+            str(metadata_file),
+            "main",
+            "ghcr.io/example/rock-a:1.0.0",
+            "ghcr.io/example/rock-b:2.0.0",
+            "ghcr.io/example/rock-c:3.0.0",
+            "--github-token",
+            "gh-token-123",
+        ],
+    )
+
+    assert result.exit_code == 0
+    args = mock_integrate.call_args.kwargs
+    assert args["rock_images"] == [
+        "ghcr.io/example/rock-a:1.0.0",
+        "ghcr.io/example/rock-b:2.0.0",
+        "ghcr.io/example/rock-c:3.0.0",
+    ]
 
 
 @mock.patch("charmed_analytics_ci.main.integrate_rock_into_consumers")

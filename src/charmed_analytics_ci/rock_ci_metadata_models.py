@@ -14,12 +14,16 @@ class ReplaceImageEntry(BaseModel):
     Attributes:
         file (Path): Path to the file containing the image reference.
         path (str): JSONPath-style path within the file where the image reference resides.
+        name (Optional[str]): Short name of the rock image this entry applies to (e.g.
+            ``my-rock``). Used to match a specific rock image when several are provided. When
+            omitted, the entry is updated only if a single rock image is supplied.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     file: Path
     path: str = Field(min_length=1)
+    name: Optional[str] = Field(default=None, min_length=1)
 
 
 class PathValue(BaseModel):

@@ -17,7 +17,7 @@ def main():
 @main.command(name="integrate-rock")
 @click.argument("metadata_file", type=click.Path(exists=True, dir_okay=False))
 @click.argument("base_branch", type=str)
-@click.argument("rock_image", type=str)
+@click.argument("rock_image", nargs=-1, required=True, type=str)
 @click.option(
     "--github-token",
     type=str,
@@ -59,7 +59,7 @@ def main():
 def integrate_rock_command(
     metadata_file: str,
     base_branch: str,
-    rock_image: str,
+    rock_image: tuple[str, ...],
     github_token: str | None,
     github_username: str,
     github_email: str | None,
@@ -68,13 +68,14 @@ def integrate_rock_command(
     triggering_pr: str | None,
 ) -> None:
     """
-    Integrate a rock image into all consumers listed in the metadata file.
+    Integrate one or more rock images into all consumers listed in the metadata file.
 
     METADATA_FILE: Path to rock-ci-metadata.yaml
 
     BASE_BRANCH: Branch to merge the PR into (e.g. main)
 
-    ROCK_IMAGE: Image reference (e.g. ghcr.io/canonical/foo:1.0.0)
+    ROCK_IMAGE: One or more image references (e.g. ghcr.io/canonical/foo:1.0.0). Multiple
+    images are bundled into a single pull request per consumer repository.
     """
     logger.info("Executing integrate-rock command")
 
@@ -91,7 +92,7 @@ def integrate_rock_command(
 
         integrate_rock_into_consumers(
             metadata_path=Path(metadata_file),
-            rock_image=rock_image,
+            rock_images=list(rock_image),
             clone_base_dir=Path(clone_dir),
             github_token=token,
             github_username=github_username,

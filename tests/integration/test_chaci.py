@@ -136,6 +136,7 @@ def test_chaci_success_opens_pr_and_cleans_up(
         username=github_client.owner.login,
         email=repo_info["email"],
     )
+    expected_body = expected_body.replace("__ROCK_IMAGE__", rock_image)
 
     pr_branch = f"integrate-{rock_short_name}-{rock_tag}"
     pr_title = f"chore: integrate rock image {rock_short_name}:{rock_tag}"
