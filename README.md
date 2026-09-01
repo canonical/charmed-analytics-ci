@@ -92,10 +92,15 @@ integrations:
         command:
           path: "containers[0].command[1]"
           value: "/start"
+
+registry: "ghcr.io/canonical"
 ```
 
 - All file paths are **relative to the repo root**
 - Paths can use `dot` and `bracket` notation for navigating YAML/JSON
+- `registry` is optional. It names the container registry the rock is published to,
+  including the host. It is consumed by CI tooling to override its default registry
+  and is ignored by `chaci`.
 
 ---
 

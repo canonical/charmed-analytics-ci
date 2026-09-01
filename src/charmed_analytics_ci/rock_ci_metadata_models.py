@@ -98,8 +98,12 @@ class RockCIMetadata(BaseModel):
 
     Attributes:
         integrations (List[IntegrationEntry]): List of integration configurations.
+        registry (Optional[str]): Optional container registry to publish the rock to,
+            including the host (e.g. 'ghcr.io/canonical'). Consumed by CI tooling to
+            override its default registry; ignored by this tool.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     integrations: List[IntegrationEntry] = Field(min_length=0)
+    registry: Optional[str] = Field(default=None, min_length=1)
