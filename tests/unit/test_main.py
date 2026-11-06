@@ -139,3 +139,37 @@ def test_cli_fails_without_token(
     assert any(
         "GitHub token not provided and GH_TOKEN not set." in message for message in caplog.messages
     ), f"Expected error message not found in logs: {caplog.messages}"
+
+
+@mock.patch("charmed_analytics_ci.main.integrate_rock_into_consumers")
+def test_cli_passes_reviewers(
+    mock_integrate: mock.MagicMock, runner: CliRunner, tmp_path: Path
+) -> None:
+    """
+    Test CLI forwards repeated --team-reviewer and --reviewer options as lists.
+    """
+    metadata_file = tmp_path / "metadata.yaml"
+    metadata_file.write_text("fake: content")
+
+    result: Result = runner.invoke(
+        main,
+        [
+            "integrate-rock",
+            str(metadata_file),
+            "main",
+            "ghcr.io/example/my-rock:2.3.4",
+            "--github-token",
+            "test-token",
+            "--team-reviewer",
+            "mlops",
+            "--team-reviewer",
+            "data",
+            "--reviewer",
+            "alice",
+        ],
+    )
+
+    assert result.exit_code == 0
+    args = mock_integrate.call_args.kwargs
+    assert args["team_reviewers"] == ["mlops", "data"]
+    assert args["reviewers"] == ["alice"]
