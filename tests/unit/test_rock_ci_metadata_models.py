@@ -105,3 +105,29 @@ def test_invalid_property_in_root():
     }
     with pytest.raises(ValidationError, match=r"Extra inputs are not permitted"):
         RockCIMetadata.model_validate(data)
+
+
+def test_registry_is_optional():
+    """Should default 'registry' to None when it is not provided."""
+    metadata = RockCIMetadata.model_validate(VALID_METADATA)
+    assert metadata.registry is None
+
+
+def test_valid_registry():
+    """Should validate and retain a 'registry' value when provided."""
+    data = {**VALID_METADATA, "registry": "ghcr.io/canonical"}
+    metadata = RockCIMetadata.model_validate(data)
+    assert metadata.registry == "ghcr.io/canonical"
+
+
+def test_registry_with_empty_integrations():
+    """Should allow 'registry' alongside an empty integrations list."""
+    metadata = RockCIMetadata.model_validate({"integrations": [], "registry": "ghcr.io/canonical"})
+    assert metadata.registry == "ghcr.io/canonical"
+
+
+def test_invalid_empty_registry():
+    """Should fail when 'registry' is an empty string."""
+    data = {**VALID_METADATA, "registry": ""}
+    with pytest.raises(ValidationError, match=r"at least 1 character"):
+        RockCIMetadata.model_validate(data)
