@@ -337,3 +337,86 @@ def test_pr_template_receives_triggering_pr(
     template_mock.render.assert_called_once()
     assert "triggering_pr" in template_mock.render.call_args.kwargs
     assert template_mock.render.call_args.kwargs["triggering_pr"] == triggering_pr
+
+
+@mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
+def test_requests_reviewers_on_opened_pr(
+    mock_validate_metadata,
+    mock_apply_integration,
+    mock_create_git_client,
+    mock_load_template,
+    metadata_file: Path,
+    tmp_path: Path,
+):
+    """Requests reviews from the given users and teams on the opened PR."""
+    mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
+    mock_apply_integration.return_value = IntegrationResult(
+        updated_files=[tmp_path / "file.yaml"], missing_files=[], path_errors=[]
+    )
+    mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
+    mock_create_git_client.return_value = mock_client
+    mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
+
+    integrate_rock_into_consumers(
+        metadata_path=metadata_file,
+        rock_image="rock/image:1.0.0",
+        clone_base_dir=tmp_path,
+        github_token="token",
+        github_username="bot",
+        github_email="bot@example.com",
+        base_branch="main",
+        reviewers=["alice"],
+        team_reviewers=["mlops"],
+    )
+
+    mock_client.request_reviewers.assert_called_once_with(
+        mock_client.open_pull_request.return_value,
+        reviewers=["alice"],
+        team_reviewers=["mlops"],
+    )
+
+
+@mock.patch("charmed_analytics_ci.rock_metadata_handler._load_pr_template")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.create_git_client_from_url")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.apply_integration")
+@mock.patch("charmed_analytics_ci.rock_metadata_handler.load_metadata_file")
+def test_dry_run_reports_reviewers(
+    mock_validate_metadata,
+    mock_apply_integration,
+    mock_create_git_client,
+    mock_load_template,
+    metadata_file: Path,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+):
+    """Dry-run logs the intended reviewers without requesting them."""
+    mock_validate_metadata.return_value = build_metadata(with_service_spec=False)
+    mock_apply_integration.return_value = IntegrationResult(
+        updated_files=[tmp_path / "file.yaml"], missing_files=[], path_errors=[]
+    )
+    mock_client = mock.Mock(repo=mock.Mock(working_dir=str(tmp_path)))
+    mock_client.repo.git.diff.return_value = ""
+    mock_create_git_client.return_value = mock_client
+    mock_load_template.return_value = mock.Mock(render=mock.Mock(return_value="body"))
+
+    with caplog.at_level("INFO"):
+        integrate_rock_into_consumers(
+            metadata_path=metadata_file,
+            rock_image="rock/image:1.0.0",
+            clone_base_dir=tmp_path,
+            github_token="token",
+            github_username="bot",
+            github_email="bot@example.com",
+            base_branch="main",
+            dry_run=True,
+            reviewers=["alice"],
+            team_reviewers=["mlops"],
+        )
+
+    mock_client.request_reviewers.assert_not_called()
+    assert any(
+        "Would request review" in m and "mlops" in m and "alice" in m for m in caplog.messages
+    )

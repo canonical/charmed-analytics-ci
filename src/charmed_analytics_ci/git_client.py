@@ -4,7 +4,7 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from git import GitCommandError, Repo
 from github import Github
@@ -179,6 +179,50 @@ class GitClient:
             return pr
         except GithubException as e:
             raise GitClientError(f"Failed to create pull request: {e}") from e
+
+    def request_reviewers(
+        self,
+        pr: PullRequest,
+        reviewers: Optional[List[str]] = None,
+        team_reviewers: Optional[List[str]] = None,
+    ) -> bool:
+        """
+        Request reviews on a pull request from users and/or organization teams.
+
+        Failures are logged as warnings and never raised, so that a failed review
+        request does not invalidate an otherwise successful PR creation.
+
+        Args:
+            pr: The pull request to request reviews on.
+            reviewers: GitHub usernames to request reviews from.
+            team_reviewers: Organization team slugs (e.g. "mlops") to request reviews from.
+
+        Returns:
+            True if the request succeeded or there was nothing to request, False otherwise.
+        """
+        reviewers = list(reviewers or [])
+        team_reviewers = list(team_reviewers or [])
+        if not reviewers and not team_reviewers:
+            return True
+
+        try:
+            pr.create_review_request(reviewers=reviewers, team_reviewers=team_reviewers)
+            logger.info(
+                "Requested review on %s from users %s and teams %s",
+                pr.html_url,
+                reviewers,
+                team_reviewers,
+            )
+            return True
+        except Exception as e:
+            logger.warning(
+                "Failed to request review on %s from users %s and teams %s: %s",
+                pr.html_url,
+                reviewers,
+                team_reviewers,
+                e,
+            )
+            return False
 
 
 def create_git_client_from_url(

@@ -71,6 +71,17 @@ chaci integrate-rock rock-ci-metadata.yaml main ghcr.io/canonical/my-rock:1.0.0 
 | `--clone-dir PATH`       | Optional. Directory where target repos will be cloned (default: `/tmp`).                        |
 | `--dry-run`              | Optional. If set, changes are simulated but not committed or pushed. Logs changes to console.   |
 | `--triggering-pr URL`    | Optional. Link to the PR which triggered this run. Included in the PR body if present.          |
+| `--team-reviewer SLUG`   | Optional, repeatable. Organization team slug (e.g. `mlops`) to request a review from on each PR. |
+| `--reviewer LOGIN`       | Optional, repeatable. GitHub username to request a review from on each PR.                      |
+
+Review requests are best-effort: if requesting reviewers fails (e.g. the team has no access to
+the repository or the token lacks permissions), a warning is logged and the command still succeeds.
+In `--dry-run` mode, the intended reviewers are logged instead.
+
+```bash
+chaci integrate-rock rock-ci-metadata.yaml main ghcr.io/canonical/my-rock:1.0.0 \
+  --team-reviewer mlops --reviewer some-user
+```
 
 ---
 

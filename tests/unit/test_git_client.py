@@ -9,6 +9,7 @@ from unittest import mock
 
 import pytest
 from git import GitCommandError, Repo
+from github.GithubException import GithubException
 
 from charmed_analytics_ci.git_client import (
     GitClient,
@@ -220,6 +221,41 @@ def test_open_pull_request_duplicate(mock_repo):
     with pytest.raises(PullRequestAlreadyExistsError) as exc_info:
         client.open_pull_request(TEST_BRANCH, PR_TITLE, PR_BODY)
     assert "pull/123" in str(exc_info.value)
+
+
+def test_request_reviewers_calls_github_api(mock_repo):
+    """It requests reviews from the given users and teams."""
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    pr = mock.MagicMock()
+
+    assert client.request_reviewers(pr, reviewers=["alice"], team_reviewers=["mlops"]) is True
+    pr.create_review_request.assert_called_once_with(reviewers=["alice"], team_reviewers=["mlops"])
+
+
+def test_request_reviewers_noop_when_empty(mock_repo):
+    """It does not call the API when there is nobody to request."""
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    pr = mock.MagicMock()
+
+    assert client.request_reviewers(pr) is True
+    pr.create_review_request.assert_not_called()
+
+
+def test_request_reviewers_failure_does_not_raise(mock_repo, caplog):
+    """It logs a warning and returns False when the review request fails."""
+    client = GitClient(
+        mock_repo, mock.Mock(), GitCredentials(TEST_USERNAME, TEST_EMAIL, TEST_TOKEN)
+    )
+    pr = mock.MagicMock()
+    pr.create_review_request.side_effect = GithubException(422, {"message": "nope"}, None)
+
+    with caplog.at_level("WARNING"):
+        assert client.request_reviewers(pr, team_reviewers=["mlops"]) is False
+    assert any("Failed to request review" in m for m in caplog.messages)
 
 
 def test_extract_repo_name_https():

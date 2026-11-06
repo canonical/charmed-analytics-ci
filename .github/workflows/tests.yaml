@@ -30,7 +30,7 @@ jobs:
         run: tox -e unit
 
   integration:
-    name: Integration tests (microk8s)
+    name: Integration tests
     runs-on: ubuntu-24.04
     env:
       CHACI_TEST_TOKEN: ${{ secrets.CHACI_TEST_TOKEN }}

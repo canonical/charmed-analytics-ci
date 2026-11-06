@@ -103,10 +103,17 @@ def integrate_rock_into_consumers(
     base_branch: str,
     dry_run: bool = False,
     triggering_pr: str | None = None,
+    reviewers: list[str] | None = None,
+    team_reviewers: list[str] | None = None,
 ) -> None:
     """
     Integrate a rock image into multiple consumer repositories defined in a metadata file.
+
+    If reviewers or team_reviewers are given, a review is requested on each opened PR.
+    Failure to request reviews is logged as a warning and does not fail the integration.
     """
+    reviewers = list(reviewers or [])
+    team_reviewers = list(team_reviewers or [])
     metadata: RockCIMetadata = load_metadata_file(metadata_path)
 
     if not metadata.integrations:
@@ -176,6 +183,12 @@ def integrate_rock_into_consumers(
                 commit_message,
             )
             logger.info("[DRY-RUN] Would open PR: %s → %s", pr_branch_name, base_branch)
+            if reviewers or team_reviewers:
+                logger.info(
+                    "[DRY-RUN] Would request review from users %s and teams %s",
+                    reviewers,
+                    team_reviewers,
+                )
             logger.info("[DRY-RUN] PR body:\n%s", pr_body)
             diff_output = client.repo.git.diff()
             if diff_output:
@@ -184,4 +197,5 @@ def integrate_rock_into_consumers(
                 logger.info("No changes to show.")
         else:
             client.commit_and_push(commit_message=commit_message, branch=pr_branch_name)
-            client.open_pull_request(base=base_branch, title=pr_title, body=pr_body)
+            pr = client.open_pull_request(base=base_branch, title=pr_title, body=pr_body)
+            client.request_reviewers(pr, reviewers=reviewers, team_reviewers=team_reviewers)

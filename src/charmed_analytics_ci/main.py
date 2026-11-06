@@ -56,6 +56,20 @@ def main():
     default=None,
     help="URL of the GitHub PR that triggered this integration (for traceability).",
 )
+@click.option(
+    "--team-reviewer",
+    "team_reviewers",
+    type=str,
+    multiple=True,
+    help="Organization team slug (e.g. mlops) to request a review from. Can be repeated.",
+)
+@click.option(
+    "--reviewer",
+    "reviewers",
+    type=str,
+    multiple=True,
+    help="GitHub username to request a review from. Can be repeated.",
+)
 def integrate_rock_command(
     metadata_file: str,
     base_branch: str,
@@ -66,6 +80,8 @@ def integrate_rock_command(
     clone_dir: str,
     dry_run: bool,
     triggering_pr: str | None,
+    team_reviewers: tuple[str, ...],
+    reviewers: tuple[str, ...],
 ) -> None:
     """
     Integrate a rock image into all consumers listed in the metadata file.
@@ -99,6 +115,8 @@ def integrate_rock_command(
             base_branch=base_branch,
             dry_run=dry_run,
             triggering_pr=triggering_pr,
+            reviewers=list(reviewers),
+            team_reviewers=list(team_reviewers),
         )
     except Exception as e:
         logger.exception(f"Failed to integrate rock image: {e}")
